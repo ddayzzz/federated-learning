@@ -91,7 +91,7 @@ class Metrics(object):
         metrics['eval_every'] = self.options['eval_every']
         metrics['eval_train_every'] = self.options['eval_train_every']
         metrics['lr'] = self.options['lr']
-        metrics['num_epoch'] = self.options['num_epoch']
+        metrics['num_epochs'] = self.options['num_epochs']
         metrics['batch_size'] = self.options['batch_size']
 
         metrics['loss_on_train_data'] = self.loss_on_train_data

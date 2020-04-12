@@ -20,7 +20,7 @@ def mkdir(path):
     return path
 
 
-def read_data_index(train_data_dir, test_data_dir):
+def read_data_index(train_data_dir, test_data_dir, sub_data=None):
     """
     解析数据
     :param train_data_dir: 训练数据目录, 自动读取 pkl
@@ -36,6 +36,10 @@ def read_data_index(train_data_dir, test_data_dir):
 
     train_files = os.listdir(train_data_dir)
     train_files = [f for f in train_files if f.endswith('.pkl')]
+    if sub_data is not None:
+        taf = sub_data + '.pkl'
+        assert taf in train_files
+        train_files = [taf]
 
     for f in train_files:
         file_path = os.path.join(train_data_dir, f)
@@ -52,6 +56,11 @@ def read_data_index(train_data_dir, test_data_dir):
 
     test_files = os.listdir(test_data_dir)
     test_files = [f for f in test_files if f.endswith('.pkl')]
+    if sub_data is not None:
+        taf = sub_data + '.pkl'
+        assert taf in test_files
+        test_files = [taf]
+
     for f in test_files:
         file_path = os.path.join(test_data_dir, f)
         print('    ', file_path)

@@ -13,27 +13,6 @@ IMAGE_DATA = False
 np.random.seed(6)
 
 
-class ImageDataset(object):
-    def __init__(self, images, labels, normalize=False):
-        if isinstance(images, torch.Tensor):
-            if not IMAGE_DATA:
-                self.data = images.view(-1, 784).numpy()/255
-            else:
-                self.data = images.numpy()
-        else:
-            self.data = images
-        if normalize and not IMAGE_DATA:
-            mu = np.mean(self.data.astype(np.float32), 0)
-            sigma = np.std(self.data.astype(np.float32), 0)
-            self.data = (self.data.astype(np.float32) - mu) / (sigma + 0.001)
-        if not isinstance(labels, np.ndarray):
-            labels = np.array(labels)
-        self.target = labels
-
-    def __len__(self):
-        return len(self.target)
-
-
 def data_split(data, num_split):
     # delta 是 data 的数据按照 num_split 的等分的数量; r 是否有多余的
     delta, r = len(data) // num_split, len(data) % num_split

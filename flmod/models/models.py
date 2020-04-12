@@ -124,6 +124,7 @@ def move_model_to(model, device):
         model.to(device)
     return model
 
+
 def choose_model_criterion(options):
     """
 
@@ -131,13 +132,11 @@ def choose_model_criterion(options):
     :return: model. train criterion, test criterion
     """
     model_name = str(options['model']).lower()
-    model = None
-    cri = None
-    eval_cri = None
+
     device = options['device']
     # TODO 一般是这个
-    cri = nn.CrossEntropyLoss()
-    eval_cri = nn.CrossEntropyLoss()
+    cri = nn.CrossEntropyLoss(reduction='mean')
+    eval_cri = nn.CrossEntropyLoss(reduction='mean')
     if model_name == 'cnn':
         model = CNN(num_classes=options['num_classes'], num_channels=options['num_channels'])
     elif model_name == 'logistic':

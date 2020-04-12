@@ -1,7 +1,7 @@
 # GLOBAL PARAMETERS
 
 DATASETS = ['mnist']
-TRAINERS = {'fedavg': 'FedAvg'}
+TRAINERS = {'fedavg': 'FedAvg', 'fedprox': 'FedProx'}
 OPTIMIZERS = TRAINERS.keys()
 
 

@@ -29,6 +29,7 @@ class BaseFedarated(object):
                                           eval_criterion=eval_criterion,
                                           worker=worker,
                                           batch_size=options['batch_size'])
+        self.num_epochs = options['num_epochs']
         self.latest_model = self.worker.get_flat_model_params()
         self.name = '_'.join(['', f'wn{options["clients_per_round"]}', f'tn{len(self.clients)}'])
         self.metrics = Metrics(clients=self.clients, options=options, name=self.name)
@@ -61,7 +62,7 @@ class BaseFedarated(object):
             c.set_flat_model_params(self.latest_model)
 
             # Solve minimization locally
-            soln, stat = c.local_train(round_i)
+            soln, stat = c.local_train(round_i, self.num_epochs)
 
             # Add solutions and stats
             solns.append(soln)

@@ -21,6 +21,21 @@ def get_flat_params_from(model):
     return flat_params
 
 
+def model_parameters_shape_list(model):
+    return [x.size() for x in model.parameters()]
+
+
+def from_flatten_to_parameter(shape_info, flat_params):
+    new_params = []
+    prev_ind = 0
+    for shape in shape_info:
+        # 计算 flat 后的乘积
+        flat_size = int(np.prod(list(shape)))
+        # 恢复值
+        new_params.append(flat_params[prev_ind:prev_ind + flat_size].view(shape))
+        prev_ind += flat_size
+    return new_params
+
 def set_flat_params_to(model, flat_params):
     """
     set model parameters from flatten parameters

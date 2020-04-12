@@ -3,7 +3,7 @@ import argparse
 import importlib
 import torch
 import os
-
+import random
 from flmod.utils.worker_utils import read_data_index
 from flmod.config import OPTIMIZERS, DATASETS, TRAINERS
 from flmod.config import model_settings
@@ -45,7 +45,7 @@ def read_options():
     parser.add_argument('--save_every',
                         help='save global model every ____ rounds;',
                         type=int,
-                        default=1)
+                        default=50)
     parser.add_argument('--clients_per_round',
                         help='number of clients trained per round;',
                         type=int,
@@ -77,10 +77,14 @@ def read_options():
     parsed = parser.parse_args()
     options = parsed.__dict__
     # Set seeds
+    os.environ['PYTHONHASHSEED'] = str(options['seed'])
     np.random.seed(1 + options['seed'])
     torch.manual_seed(12 + options['seed'])
+    random.seed(1234 + options['seed'])
     if options['device'].startswith('cuda'):
         torch.cuda.manual_seed_all(123 + options['seed'])
+        torch.backends.cudnn.deterministic = True  # cudnn
+
 
     # read data
     idx = options['dataset'].find("_")
@@ -115,7 +119,7 @@ def main():
     train_path = os.path.join('./dataset', dataset_name, 'data', 'train')
     test_path = os.path.join('./dataset', dataset_name, 'data', 'test')
 
-    all_data_info, (train_dataset, test_datatset) = read_data_index(train_path, test_path), model_settings.get_entire_dataset(dataset_name, options=options)
+    all_data_info, (train_dataset, test_datatset) = read_data_index(train_path, test_path, sub_data=sub_data), model_settings.get_entire_dataset(dataset_name, options=options)
     all_data_info = list(all_data_info)
     all_data_info.extend([train_dataset, test_datatset])
     # Call appropriate trainer
