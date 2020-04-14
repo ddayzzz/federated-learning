@@ -1,5 +1,6 @@
 import os
 from torchvision import datasets, transforms
+from torch.utils.data import ConcatDataset
 
 
 class FlattenInput(object):
@@ -11,7 +12,7 @@ class FlattenInput(object):
         return tensor.view(-1)
 
 
-def get_dataset(flatten_input=False):
+def get_dataset(flatten_input=False, merge_train_test=False):
     """
     Returns train and test datasets and a user group which is a dict where
     the keys are the user index and the values are the corresponding data for
@@ -36,4 +37,7 @@ def get_dataset(flatten_input=False):
 
     test_dataset = datasets.MNIST(data_dir, train=False, download=True,
                                   transform=apply_transform)
+    if merge_train_test:
+        train_dataset = ConcatDataset((train_dataset, test_dataset))
+        test_dataset = None
     return train_dataset, test_dataset

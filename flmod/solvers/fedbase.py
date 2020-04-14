@@ -36,23 +36,45 @@ class BaseFedarated(object):
         self.print_result = True
 
     def setup_clients(self, dataset, criterion, eval_criterion, worker, batch_size):
-        users, groups, train_data, test_data, entire_train_dataset, entire_test_dataset = dataset
-        if len(groups) == 0:
-            groups = [None for _ in users]
+        if dataset[-1] == None:
+            users, groups, train_data, test_data, entire_train_test_dataset, _ = dataset
+            if len(groups) == 0:
+                groups = [None for _ in users]
+            all_clients = []
+            for user, group in zip(users, groups):
+                if isinstance(user, str) and len(user) >= 5:
+                    user_id = int(user[-5:])
+                else:
+                    user_id = int(user)
+                self.num_train_data += len(train_data[user])
+                # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
+                c = BaseClient(id=user_id, worker=self.worker, batch_size=batch_size, criterion=criterion,
+                               eval_criterion=eval_criterion,
+                               train_dataset=DatasetSplit(entire_train_test_dataset, idxs=train_data[user]['x_index']),
+                               test_dataset=DatasetSplit(entire_train_test_dataset, test_data[user]['x_index']))
+                all_clients.append(c)
+            return all_clients
+        else:
+            users, groups, train_data, test_data, entire_train_dataset, entire_test_dataset = dataset
+            if len(groups) == 0:
+                groups = [None for _ in users]
 
-        all_clients = []
-        for user, group in zip(users, groups):
-            if isinstance(user, str) and len(user) >= 5:
-                user_id = int(user[-5:])
-            else:
-                user_id = int(user)
-            self.num_train_data += len(train_data[user])
-            # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
-            c = BaseClient(id=user_id, worker=self.worker, batch_size=batch_size, criterion=criterion,
-                           eval_criterion=eval_criterion, train_dataset=DatasetSplit(entire_train_dataset, idxs=train_data[user]['x_index']),
-                           test_dataset=DatasetSplit(entire_test_dataset, test_data[user]['x_index']))
-            all_clients.append(c)
-        return all_clients
+            all_clients = []
+            for user, group in zip(users, groups):
+                if isinstance(user, str) and len(user) >= 5:
+                    user_id = int(user[-5:])
+                else:
+                    user_id = int(user)
+                self.num_train_data += len(train_data[user])
+                # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
+                c = BaseClient(id=user_id, worker=self.worker, batch_size=batch_size, criterion=criterion,
+                               eval_criterion=eval_criterion,
+                               train_dataset=DatasetSplit(entire_train_dataset, idxs=train_data[user]['x_index']),
+                               test_dataset=DatasetSplit(entire_test_dataset, test_data[user]['x_index']))
+                all_clients.append(c)
+            return all_clients
+
+
 
     def local_train(self, selected_clients, round_i):
         solns = []  # Buffer for receiving client solutions
@@ -143,6 +165,34 @@ class BaseFedarated(object):
                    round_i, stats_from_train_data['acc'], stats_from_train_data['loss'],
                    stats_from_train_data['gradnorm'], difference, end_time-begin_time))
         return global_grads
+
+    def calc_client_grads(self, round_i):
+        # Collect stats from total train data
+        model_len = len(self.latest_model)
+        global_grads = np.zeros(model_len)
+        num_samples = []
+        local_grads = []
+        start_time = time.time()
+        for c in self.clients:
+            (num, client_grad), stat = c.solve_grad()
+            local_grads.append(client_grad)
+            num_samples.append(num)
+            global_grads += client_grad * num
+        global_grads /= np.sum(np.asarray(num_samples))
+        gradnorm = np.linalg.norm(global_grads)
+
+        # Measure the gradient difference
+        difference = 0.
+        for idx in range(len(self.clients)):
+            difference += np.sum(np.square(global_grads - local_grads[idx]))
+        difference /= len(self.clients)
+
+        end_time = time.time()
+        # 设置stats
+        stats = {'gradnorm': gradnorm, 'graddiff': difference}
+        print('\n>>> Round: {: >4d} / Grad Norm: {:.4f} / Grad Diff: {:.4f} / Time: {:.2f}s'.format(
+            round_i, gradnorm, difference, end_time - start_time))
+        self.metrics.update_grads_stats(round_i, stats)
 
     def test_latest_model_on_evaldata(self, round_i):
         # Collect stats from total eval data

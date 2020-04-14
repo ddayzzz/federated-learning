@@ -18,9 +18,9 @@ class FedAvg(BaseFedarated):
 
     def train(self):
         for round_i in range(self.num_rounds):
-            local_weights, local_losses = [], []
             print(f'>>> Global Training Round : {round_i + 1}')
-
+            if (round_i + 1) % self.eval_on_train_every_round == 0:
+                self.calc_client_grads(round_i)
             selected_clients = self.select_clients(round=round_i, num_clients=self.clients_per_round)
             solutions, stats = self.local_train(selected_clients, round_i=round_i)
             self.metrics.extend_commu_stats(round_i, stats)
@@ -30,8 +30,6 @@ class FedAvg(BaseFedarated):
             # eval on test
             if (round_i + 1) % self.eval_on_test_every_round == 0:
                 self.test_latest_model_on_evaldata(round_i)
-            if (round_i + 1) % self.eval_on_train_every_round == 0:
-                self.test_latest_model_on_traindata(round_i)
             if (round_i + 1) % self.save_every_round == 0:
                 self.save_model(round_i)
 

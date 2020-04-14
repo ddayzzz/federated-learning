@@ -38,11 +38,12 @@ class ModelConfig(object):
     def get_entire_dataset(dataset, options):
         if dataset == 'mnist':
             from flmod.dataset.mnist.get_datset import get_dataset
+            merged = options['dataset'] == 'mnist_user1000_niid_0_keep_10_train_9'
             if options['model'] == 'logistic':
                 # 需要扁平化
-                return get_dataset(flatten_input=True)
+                return get_dataset(flatten_input=True, merge_train_test=merged)
             else:
-                return get_dataset(flatten_input=False)
+                return get_dataset(flatten_input=False, merge_train_test=merged)
 
         else:
             raise ValueError('Not support dataset {}!'.format(dataset))

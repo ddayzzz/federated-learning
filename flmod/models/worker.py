@@ -58,6 +58,10 @@ class Worker(object):
 
     def get_flat_grads(self, dataloader):
         self.optimizer.zero_grad()
+        # ds = [(x, y) for x, y in dataloader]
+        # x = torch.cat([xy[0] for xy in ds]).to(self.device)
+        # y = torch.cat([xy[1] for xy in ds]).to(self.device)
+        # loss = self.criterion(self.model(x), y)
         loss, total_num = 0., 0
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
@@ -65,7 +69,6 @@ class Worker(object):
             loss += self.criterion(pred, y) * y.size(0)
             total_num += y.size(0)
         loss /= total_num
-
         flat_grads = get_flat_grad(loss, self.model.parameters(), create_graph=True)
         return flat_grads
 
@@ -114,10 +117,10 @@ class Worker(object):
                     train_total += target_size
                     if self.verbose and (batch_idx % 10 == 0):
                         # 纯数值, 这里使用平均的损失
-                        t.set_postfix(loss=loss.item())
+                        t.set_postfix(mean_loss=loss.item())
 
             local_solution = self.get_flat_model_params()
-            # 这个可能是梯度的信息
+            # 计算模型的参数值
             param_dict = {"norm": torch.norm(local_solution).item(),
                           "max": local_solution.max().item(),
                           "min": local_solution.min().item()}
@@ -144,7 +147,7 @@ class Worker(object):
                 correct = predicted.eq(y).sum()
                 size = y.size(0)
                 test_acc += correct.item()
-                test_loss += loss.item() * size
+                test_loss += loss.item() * size  # 需要乘以数据的维度, 最后除以总数量得到平均的损失
                 test_total += size
 
         return test_acc, test_loss

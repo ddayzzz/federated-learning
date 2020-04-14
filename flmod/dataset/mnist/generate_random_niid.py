@@ -1,11 +1,10 @@
-import torch
 import numpy as np
+import sys
 import pickle
 import os
 import torchvision
 cpath = os.path.dirname(__file__)
 
-NUM_USER = 100
 SAVE = True
 DATASET_FILE = os.path.join(cpath, 'data')
 MNIST_DOWNLOAD = cpath
@@ -49,7 +48,7 @@ def choose_two_digit(split_data_lst):
     return lst
 
 
-def main():
+def main(num_user=100, split=2):
     # Get MNIST data, normalize, and divide by level
     print('>>> Get MNIST data.')
     trainset = torchvision.datasets.MNIST(MNIST_DOWNLOAD, download=True, train=True)
@@ -77,7 +76,7 @@ def main():
     split_mnist_traindata = []
     for digit in mnist_train_data_index:
         # 一种类型的 digit 进行 20 的等分
-        split_mnist_traindata.append(data_split(digit, 20))
+        split_mnist_traindata.append(data_split(digit, split))
 
     mnist_test_data_index = []
     for number in range(10):
@@ -87,7 +86,7 @@ def main():
     # 按照比例分割, 总共有 len(digit) // 20 = 最小的类别的数据 // 20
     split_mnist_testdata = []
     for digit in mnist_test_data_index:
-        split_mnist_testdata.append(data_split(digit, 20))
+        split_mnist_testdata.append(data_split(digit, split))
     # 每个类别数据的占比
     data_distribution = np.array([len(v) for v in mnist_train_data_index])
     data_distribution = np.round(data_distribution / data_distribution.sum(), 3)
@@ -104,13 +103,13 @@ def main():
     # train_y = [[] for _ in range(NUM_USER)]
     # test_X = [[] for _ in range(NUM_USER)]
     # test_y = [[] for _ in range(NUM_USER)]
-    train_X_idx = [list() for _ in range(NUM_USER)]
-    test_X_idx = [list() for _ in range(NUM_USER)]
+    train_X_idx = [list() for _ in range(num_user)]
+    test_X_idx = [list() for _ in range(num_user)]
 
     print(">>> Data is non-i.i.d. distributed")
-    print(">>> Data is unbalanced")
+    print(">>> Data is balanced")
 
-    for user in range(NUM_USER):
+    for user in range(num_user):
         # 显示当前用户下剩下的可以分配的数据批次(每次递减两个类)
         print(user, np.array([len(v) for v in split_mnist_traindata]))
 
@@ -128,8 +127,13 @@ def main():
     # Setup directory for train/test data
     print('>>> Set data path for MNIST.')
     image = 1 if IMAGE_DATA else 0
-    train_path = '{}/data/train/all_data_{}_random_niid.pkl'.format(cpath, image)
-    test_path = '{}/data/test/all_data_{}_random_niid.pkl'.format(cpath, image)
+    if num_user == 100 and split == 20:
+        # TODO 这个是默认的参数
+        train_path = '{}/data/train/all_data_{}_random_niid.pkl'.format(cpath, image)
+        test_path = '{}/data/test/all_data_{}_random_niid.pkl'.format(cpath, image)
+    else:
+        train_path = '{}/data/train/all_data_{}_random_niid_user_{}_split_{}.pkl'.format(cpath, image, num_user, split)
+        test_path = '{}/data/test/all_data_{}_random_niid_user_{}_split_{}.pkl'.format(cpath, image, num_user, split)
 
     dir_path = os.path.dirname(train_path)
     if not os.path.exists(dir_path):
@@ -144,7 +148,7 @@ def main():
     test_data = {'users': [], 'user_data': {}, 'num_samples': []}
 
     # Setup 1000 users
-    for i in range(NUM_USER):
+    for i in range(num_user):
         uname = i
         train_data['users'].append(uname)
         train_data['user_data'][uname] = {'x_index': train_X_idx[i]}
@@ -169,5 +173,12 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # if len(sys.argv) > 1:
+    #     nu = int(sys.argv[1])
+    #     sp = int(sys.argv[2])
+    # else:
+    nu = 100
+    sp = 20
+    # assert sp * nu >= nu * 2, "客户端数量 * 2 == 客户端数量 * 每个类分割的比例"
+    main(num_user=nu, split=sp)
 

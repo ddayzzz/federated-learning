@@ -2,10 +2,10 @@ import torch
 import numpy as np
 
 
-def zeros(shape, gpu=False, **kwargs):
+def zeros(shape, gpu=True, **kwargs):
     # return torch.zeros(*shape, **kwargs).cuda() if use_gpu and gpu else torch.zeros(*shape)
     # TODO 创建 CUDA 的张量
-    return torch.zeros(*shape, **kwargs).cuda()
+    return torch.zeros(*shape, **kwargs).cuda() if gpu else torch.zeros(*shape, **kwargs)
 
 def get_flat_params_from(model):
     """
@@ -36,6 +36,7 @@ def from_flatten_to_parameter(shape_info, flat_params):
         prev_ind += flat_size
     return new_params
 
+
 def set_flat_params_to(model, flat_params):
     """
     set model parameters from flatten parameters
@@ -55,11 +56,11 @@ def set_flat_params_to(model, flat_params):
 
 def get_grad_dict(output, inputs, filter_input_ids=set(), retain_graph=False, create_graph=False):
     """
-
-    :param output:
-    :param inputs:
-    :param filter_input_ids:
-    :param retain_graph:
+    获得梯度信息
+    :param output: 输出,一般是loss
+    :param inputs: 模型的参数
+    :param filter_input_ids: 去掉那些的不用的参数
+    :param retain_graph:  retain_graph 和 create_graph 的值一般相同; 前者为 False 表示计算后销毁计算图
     :param create_graph:
     :return:
     """
@@ -71,8 +72,7 @@ def get_grad_dict(output, inputs, filter_input_ids=set(), retain_graph=False, cr
     for i, param in enumerate(inputs):
         if i not in filter_input_ids:
             params.append(param)
-    # 计算梯度: output 关于 params 的梯度;
-    # retain_graph 和 create_graph 的值一般相同; 前者为 False 表示计算后销毁计算图
+
     grads = torch.autograd.grad(output, params, retain_graph=retain_graph, create_graph=create_graph)
 
     j = 0
