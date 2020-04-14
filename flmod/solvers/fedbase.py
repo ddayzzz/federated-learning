@@ -3,6 +3,7 @@ import os
 import time
 import abc
 import torch
+from flmod.utils.worker_utils import MiniDataset
 from flmod.clients.base_client import BaseClient
 from flmod.utils.data_utils import DatasetSplit
 from flmod.utils.metrics import Metrics
@@ -36,8 +37,9 @@ class BaseFedarated(object):
         self.print_result = True
 
     def setup_clients(self, dataset, criterion, eval_criterion, worker, batch_size):
-        if dataset[-1] == None:
-            users, groups, train_data, test_data, entire_train_test_dataset, _ = dataset
+        users, groups, train_data, test_data, entire_train_dataset, entire_test_dataset = dataset
+        if entire_test_dataset is None and entire_train_dataset is not None:
+            # train  和 test 的数据是合并的
             if len(groups) == 0:
                 groups = [None for _ in users]
             all_clients = []
@@ -50,12 +52,30 @@ class BaseFedarated(object):
                 # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
                 c = BaseClient(id=user_id, worker=self.worker, batch_size=batch_size, criterion=criterion,
                                eval_criterion=eval_criterion,
-                               train_dataset=DatasetSplit(entire_train_test_dataset, idxs=train_data[user]['x_index']),
-                               test_dataset=DatasetSplit(entire_train_test_dataset, test_data[user]['x_index']))
+                               train_dataset=DatasetSplit(entire_train_dataset, idxs=train_data[user]['x_index']),
+                               test_dataset=DatasetSplit(entire_train_dataset, test_data[user]['x_index']))
+                all_clients.append(c)
+            return all_clients
+        elif entire_test_dataset is None and entire_train_dataset is None:
+            # 没有 index 的数据, train 和 tes 直接带有数据
+            if len(groups) == 0:
+                groups = [None for _ in users]
+
+            all_clients = []
+            for user, group in zip(users, groups):
+                if isinstance(user, str) and len(user) >= 5:
+                    user_id = int(user[-5:])
+                else:
+                    user_id = int(user)
+                self.num_train_data += len(train_data[user])
+                c = BaseClient(id=user_id, worker=self.worker, batch_size=batch_size, criterion=criterion,
+                               eval_criterion=eval_criterion,
+                               train_dataset=MiniDataset(train_data[user]['x'], train_data[user]['y']),
+                               test_dataset=MiniDataset(test_data[user]['x'], test_data[user]['y']))
                 all_clients.append(c)
             return all_clients
         else:
-            users, groups, train_data, test_data, entire_train_dataset, entire_test_dataset = dataset
+            # 采用 index 的数据
             if len(groups) == 0:
                 groups = [None for _ in users]
 
@@ -132,7 +152,11 @@ class BaseFedarated(object):
         return averaged_solution.detach()
 
     def test_latest_model_on_traindata(self, round_i):
-        # Collect stats from total train data
+        """
+        在训练数据集上测试
+        :param round_i:
+        :return:
+        """
         begin_time = time.time()
         stats_from_train_data = self.local_test(use_eval_data=False)
 
@@ -205,7 +229,7 @@ class BaseFedarated(object):
                   'loss: {:.4f} / Time: {:.2f}s'.format(
                    round_i, stats_from_eval_data['acc'],
                    stats_from_eval_data['loss'], end_time-begin_time))
-            print('=' * 102 + "\n")
+            # print('=' * 102 + "\n")
 
         self.metrics.update_eval_stats(round_i, stats_from_eval_data)
 

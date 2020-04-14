@@ -1,6 +1,6 @@
 # GLOBAL PARAMETERS
 
-DATASETS = ['mnist']
+DATASETS = ['mnist', 'synthetic']
 TRAINERS = {'fedavg': 'FedAvg', 'fedprox': 'FedProx'}
 OPTIMIZERS = TRAINERS.keys()
 
@@ -38,13 +38,16 @@ class ModelConfig(object):
     def get_entire_dataset(dataset, options):
         if dataset == 'mnist':
             from flmod.dataset.mnist.get_datset import get_dataset
-            merged = options['dataset'] == 'mnist_user1000_niid_0_keep_10_train_9'
+            if options['dataset'] == 'mnist_user1000_niid_0_keep_10_train_9':
+                # 这个数据不使用 index
+                return None, None
             if options['model'] == 'logistic':
                 # 需要扁平化
-                return get_dataset(flatten_input=True, merge_train_test=merged)
+                return get_dataset(flatten_input=True)
             else:
-                return get_dataset(flatten_input=False, merge_train_test=merged)
-
+                return get_dataset(flatten_input=False)
+        elif dataset == 'synthetic':
+            return None, None
         else:
             raise ValueError('Not support dataset {}!'.format(dataset))
 

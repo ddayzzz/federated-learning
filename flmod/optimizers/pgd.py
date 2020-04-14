@@ -26,7 +26,6 @@ class PerturbedGradientDescent(Optimizer):
         for group in self.param_groups:
             group.setdefault('nesterov', False)
 
-
     def step(self, closure=None):
         """Performs a single optimization step.
 
@@ -68,6 +67,12 @@ class PerturbedGradientDescent(Optimizer):
 
         return loss
 
+    def set_mu(self, mu):
+        for param_group in self.param_groups:
+            param_group['mu'] = mu
+
+    def get_mu(self):
+        return self.param_groups[0]['mu']
 
     def set_old_weights(self, old_weights):
         for param_group in self.param_groups:

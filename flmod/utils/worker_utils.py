@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 from PIL import Image
 
 
-__all__ = ['mkdir', 'read_data_index', ]
+__all__ = ['mkdir', 'read_data_pkl', ]
 
 
 def mkdir(path):
@@ -20,7 +20,7 @@ def mkdir(path):
     return path
 
 
-def read_data_index(train_data_dir, test_data_dir, sub_data=None):
+def read_data_pkl(train_data_dir, test_data_dir, sub_data=None):
     """
     解析数据
     :param train_data_dir: 训练数据目录, 自动读取 pkl
@@ -75,6 +75,11 @@ def read_data_index(train_data_dir, test_data_dir, sub_data=None):
 
 class MiniDataset(Dataset):
     def __init__(self, data, labels):
+        """
+        这个类在读取的 pkl 为实际的数据的时候用于将 dict 格式的数据转换为 Tensor
+        :param data:
+        :param labels:
+        """
         super(MiniDataset, self).__init__()
         self.data = np.array(data)
         self.labels = np.array(labels).astype("int64")

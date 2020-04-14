@@ -4,72 +4,7 @@ import numpy as np
 from flmod.solvers.fedbase import BaseFedarated
 from flmod.models.models import choose_model_criterion
 from flmod.optimizers.pgd import PerturbedGradientDescent
-from flmod.clients.base_client import BaseClient
-from flmod.utils.data_utils import DatasetSplit
-from flmod.models.worker import Worker
-import tqdm
 
-
-class FedProxWorker(Worker):
-
-    def __init__(self, model, criterion, eval_criterion, optimizer, options):
-        """
-        与普通的 Worker 不同, 一次客户端的计算返回的累计的梯度信息
-        :param model:
-        :param criterion:
-        :param eval_criterion:
-        :param optimizer:
-        :param options:
-        """
-        super(FedProxWorker, self).__init__(model, criterion, eval_criterion, optimizer, options)
-
-    def local_train(self, num_epochs, train_dataloader, round_i, client_id):
-        self.model.train()
-        with tqdm.trange(num_epochs) as t:
-            train_loss = train_acc = train_total = 0
-            for epoch in t:
-                t.set_description(f'Client: {client_id}, Round: {round_i + 1}, Epoch :{epoch + 1}')
-                for batch_idx, (x, y) in enumerate(train_dataloader):
-                    # from IPython import embed
-                    # embed()
-                    x, y = x.to(self.device), y.to(self.device)
-
-                    self.optimizer.zero_grad()
-                    pred = self.model(x)
-
-                    if torch.isnan(pred.max()):
-                        from IPython import embed
-                        embed()
-
-                    loss = self.criterion(pred, y)
-                    loss.backward()
-                    # torch.nn.utils.clip_grad_norm(self.model.parameters(), 60)
-                    self.optimizer.step()
-
-                    _, predicted = torch.max(pred, 1)
-                    correct = predicted.eq(y).sum().item()
-
-                    target_size = y.size(0)
-                    # TODO 一般的损失函数会进行平均(mean), 但是这里不需要, 一种做法是指定损失函数仅仅用 sum, 但是考虑到pytorch中的损失函数默认为mean,故这里进行了些修改
-                    single_batch_loss = loss.item() * target_size
-                    train_loss += single_batch_loss
-                    train_acc += correct
-                    train_total += target_size
-                    if self.verbose and (batch_idx % 10 == 0):
-                        # 纯数值, 这里使用平均的损失
-                        t.set_postfix(mean_loss=loss.item())
-
-            local_solution = self.get_flat_model_params()
-            # 计算模型的参数值
-            param_dict = {"norm": torch.norm(local_solution).item(),
-                          "max": local_solution.max().item(),
-                          "min": local_solution.min().item()}
-            comp = num_epochs * train_total * self.flops
-            return_dict = {"comp": comp,
-                           "loss": train_loss / train_total,
-                           "acc": train_acc / train_total}
-            return_dict.update(param_dict)
-            return local_solution, return_dict
 
 class FedProx(BaseFedarated):
 
@@ -108,6 +43,13 @@ class FedProx(BaseFedarated):
         oldw = self.worker.to_model_params(self.latest_model)
         self.optimizer.set_old_weights(old_weights=oldw)
 
+    def update_optimizer_mu(self):
+        """
+        更新 mu, 对于 iid 数据, mu 初始化为1, 对于生成的数据 Synthetic(non-iid), 初始化为0; 原论文的 Figure 11
+        :return:
+        """
+        pass
+
     def train(self):
         for round_i in range(self.num_rounds):
             print(f'>>> Global Training Round : {round_i + 1}')
@@ -141,7 +83,11 @@ class FedProx(BaseFedarated):
 
             if (round_i + 1) % self.save_every_round == 0:
                 self.save_model(round_i)
+            # 写入 mu  和 lr
+            # lr = self.optimizer.get_current_lr()
+            # mu = self.optimizer.get_mu()
+            # self.metrics.update_custom_scalars(round_i, lr=lr, mu=mu)
 
-        # self.test_latest_model_on_traindata(self.num_rounds)
-        # self.test_latest_model_on_evaldata(self.num_rounds)
+        self.test_latest_model_on_traindata(self.num_rounds)
+        self.test_latest_model_on_evaldata(self.num_rounds)
         self.metrics.write()

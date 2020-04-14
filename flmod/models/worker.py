@@ -1,6 +1,5 @@
 from flmod.utils.torch_utils import get_flat_params_from, set_flat_params_to, get_flat_grad, model_parameters_shape_list, from_flatten_to_parameter
 from flmod.utils.flops_counter import get_model_complexity_info
-import torch.nn as nn
 import tqdm
 import torch
 
@@ -58,10 +57,6 @@ class Worker(object):
 
     def get_flat_grads(self, dataloader):
         self.optimizer.zero_grad()
-        # ds = [(x, y) for x, y in dataloader]
-        # x = torch.cat([xy[0] for xy in ds]).to(self.device)
-        # y = torch.cat([xy[1] for xy in ds]).to(self.device)
-        # loss = self.criterion(self.model(x), y)
         loss, total_num = 0., 0
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)

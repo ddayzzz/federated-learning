@@ -9,7 +9,7 @@ import os
 cpath = os.path.dirname(__file__)
 
 
-NUM_USER = 100
+NUM_USER = 30
 NUM_CLASS = 10
 DIMENSION = 60
 SAVE = True
@@ -76,7 +76,7 @@ def generate_synthetic(alpha, beta, iid=True):
 
 
 def generate_for_task(alpha, beta, iid):
-    dataset_name = 'synthetic_alpha{}_beta{}_{}'.format(alpha, beta, 'iid' if iid else 'niid')
+    dataset_name = 'alpha{}_beta{}_{}'.format(alpha, beta, 'iid' if iid else 'niid')
     print('\n')
     print('>>> Generate data for {}'.format(dataset_name))
     train_path = "{}/data/train/{}.pkl".format(cpath, dataset_name)

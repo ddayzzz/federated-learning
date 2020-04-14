@@ -4,7 +4,7 @@ import importlib
 import torch
 import os
 import random
-from flmod.utils.worker_utils import read_data_index
+from flmod.utils.worker_utils import read_data_pkl
 from flmod.config import OPTIMIZERS, DATASETS, TRAINERS
 from flmod.config import model_settings
 
@@ -119,7 +119,7 @@ def main():
     train_path = os.path.join('./dataset', dataset_name, 'data', 'train')
     test_path = os.path.join('./dataset', dataset_name, 'data', 'test')
 
-    all_data_info, (train_dataset, test_datatset) = read_data_index(train_path, test_path, sub_data=sub_data), model_settings.get_entire_dataset(dataset_name, options=options)
+    all_data_info, (train_dataset, test_datatset) = read_data_pkl(train_path, test_path, sub_data=sub_data), model_settings.get_entire_dataset(dataset_name, options=options)
     all_data_info = list(all_data_info)
     all_data_info.extend([train_dataset, test_datatset])
     # Call appropriate trainer

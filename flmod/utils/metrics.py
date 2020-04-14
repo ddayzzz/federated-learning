@@ -28,7 +28,9 @@ class Metrics(object):
         # Statistics in test procedure
         self.loss_on_eval_data = [0] * num_rounds
         self.acc_on_eval_data = [0] * num_rounds
-
+        # customs
+        self.customs_data = dict()
+        self.num_rounds = num_rounds
         self.result_path = mkdir(os.path.join('./result', self.options['dataset']))
         # suffix = '{}_sd{}_lr{}_ep{}_bs{}_{}'.format(name,
         #                                             options['seed'],
@@ -88,6 +90,13 @@ class Metrics(object):
         self.eval_writer.add_scalar('test_loss', eval_stats['loss'], round_i)
         self.eval_writer.add_scalar('test_acc', eval_stats['acc'], round_i)
 
+    def update_custom_scalars(self, round_i, **data):
+        for key, scalar in data.items():
+            if key not in self.customs_data:
+                self.customs_data[key] = [0] * self.num_rounds
+            self.customs_data[key][round_i] = scalar
+            self.train_writer.add_scalar(key, scalar_value=scalar, global_step=round_i)
+
     def write(self):
         metrics = dict()
 
@@ -112,7 +121,8 @@ class Metrics(object):
         metrics['client_computations'] = self.client_computations
         metrics['bytes_written'] = self.bytes_written
         metrics['bytes_read'] = self.bytes_read
-
+        for key, data in self.customs_data.items():
+            metrics[key] = data
         metrics_dir = os.path.join(self.result_path, self.exp_name, 'metrics.json')
 
         with open(metrics_dir, 'w') as ouf:
