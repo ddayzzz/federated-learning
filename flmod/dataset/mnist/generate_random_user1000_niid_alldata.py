@@ -10,8 +10,8 @@ IMAGE_DATA = 0
 
 
 # Setup directory for train/test data
-train_path = './data/train/user1000_niid_0_keep_10_train_9.pkl'
-test_path = './data/test/user1000_niid_0_keep_10_train_9.pkl'
+train_path = f'{DATA}/data/train/user1000_niid_0_keep_10_train_9.pkl'
+test_path = f'{DATA}/data/test/user1000_niid_0_keep_10_train_9.pkl'
 dir_path = os.path.dirname(train_path)
 if not os.path.exists(dir_path):
     os.makedirs(dir_path)

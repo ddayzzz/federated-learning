@@ -11,12 +11,11 @@ class Worker(object):
     All solution, parameter or grad are Tensor type.
     """
 
-    def __init__(self, model, criterion, eval_criterion, optimizer, options):
+    def __init__(self, model, criterion, optimizer, options):
         # Basic parameters
         self.model = model
         self.optimizer = optimizer
         self.criterion = criterion
-        self.eval_criterion = eval_criterion
         self.device = options['device']
         self.verbose = True
         self.flops, self.params_num, self.model_bytes = \
@@ -137,7 +136,7 @@ class Worker(object):
                 x, y = x.to(self.device), y.to(self.device)
 
                 pred = self.model(x)
-                loss = self.eval_criterion(pred, y)
+                loss = self.criterion(pred, y)
                 _, predicted = torch.max(pred, 1)
                 correct = predicted.eq(y).sum()
                 size = y.size(0)

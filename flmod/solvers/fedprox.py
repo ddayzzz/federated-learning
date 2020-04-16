@@ -9,10 +9,11 @@ from flmod.optimizers.pgd import PerturbedGradientDescent
 class FedProx(BaseFedarated):
 
     def __init__(self, options, all_data_info):
-        model, crit, eval_crit = choose_model_criterion(options=options)
+        model, crit = choose_model_criterion(options=options)
         self.optimizer = PerturbedGradientDescent(model.parameters(), lr=options['lr'], momentum=0.5, mu=options['mu'])
+        suffix = f'mu{options["mu"]}_dp{options["drop_rate"]}'
         super(FedProx, self).__init__(options=options, model=model, dataset=all_data_info, optimizer=self.optimizer,
-                                     criterion=crit, eval_criterion=eval_crit)
+                                     criterion=crit, append2metric=suffix)
         self.drop_rate = options['drop_rate']
         self.num_rounds = options['num_rounds']
         self.clients_per_round = options['clients_per_round']

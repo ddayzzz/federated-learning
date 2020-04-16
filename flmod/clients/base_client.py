@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 
 class BaseClient(object):
 
-    def __init__(self, id, worker, batch_size, criterion, eval_criterion, train_dataset, test_dataset):
+    def __init__(self, id, worker, batch_size, criterion, train_dataset, test_dataset):
         """
         定义基本的客户端
         :param model:
@@ -16,7 +16,6 @@ class BaseClient(object):
 
         self.id = id
         self.criterion = criterion
-        self.eval_criterion = eval_criterion
         self.num_train_data = len(self.train_data_loader.dataset)
         self.num_test_data = len(self.test_data_loader.dataset)
         self.worker = worker

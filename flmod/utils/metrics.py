@@ -12,7 +12,7 @@ def mkdir(path):
 
 
 class Metrics(object):
-    def __init__(self, clients, options, name=''):
+    def __init__(self, clients, options, name='', append2suffix=None):
         self.options = options
         num_rounds = options['num_rounds'] + 1
         self.bytes_written = {c.id: [0] * num_rounds for c in clients}
@@ -43,6 +43,8 @@ class Metrics(object):
                                                     options['lr'],
                                                     options['num_epochs'],
                                                     options['batch_size'])
+        if append2suffix is not None:
+            suffix += '_' + append2suffix
 
         self.exp_name = '{}_{}_{}_{}'.format(time.strftime('%Y-%m-%dT%H-%M-%S'), options['algo'],
                                              options['model'], suffix)
@@ -126,4 +128,4 @@ class Metrics(object):
         metrics_dir = os.path.join(self.result_path, self.exp_name, 'metrics.json')
 
         with open(metrics_dir, 'w') as ouf:
-            json.dump(str(metrics), ouf)
+            json.dump(metrics, ouf)

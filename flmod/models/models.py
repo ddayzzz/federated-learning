@@ -8,6 +8,19 @@ class Logistic(nn.Module):
     def __init__(self, in_dim, out_dim):
         super(Logistic, self).__init__()
         self.layer = nn.Linear(in_dim, out_dim)
+        # 初始化, 这个初始化和 tf.layers.dense 和 tf.get_variable(用于 weight)相同,
+        # https://www.tensorflow.org/api_docs/python/tf/compat/v1/get_variable
+        # https://zhuanlan.zhihu.com/p/72853886
+        # https://www.tensorflow.org/api_docs/python/tf/compat/v1/layers/dense
+        torch.nn.init.xavier_uniform(self.layer.weight)
+        self.layer.bias.data.fill_(0)
+        # 顺序和 parameters 一样
+        # pt_latest_w = torch.from_numpy(np.zeros([10, 784], dtype=np.float32))
+        # pt_latest_b = torch.from_numpy(np.zeros([10], dtype=np.float32))
+        # pt_latest_w = torch.from_numpy(np.load('../weight.npy'))
+        # pt_latest_b = torch.from_numpy(np.load('../bias.npy'))
+        # self.layer.weight.data.copy_(pt_latest_w)
+        # self.layer.bias.data.copy_(pt_latest_b)
 
     def forward(self, x):
         logit = self.layer(x)
@@ -117,6 +130,11 @@ class CifarCnn(nn.Module):
         return out
 
 
+class ShakespeareLSTM(nn.Module):
+
+    def __init__(self, sequence_len, num_classes):
+        pass
+
 def move_model_to(model, device):
     if not device.startswith('cpu'):
         torch.cuda.set_device(device)
@@ -136,7 +154,6 @@ def choose_model_criterion(options):
     device = options['device']
     # TODO 一般是这个
     cri = nn.CrossEntropyLoss(reduction='mean')
-    eval_cri = nn.CrossEntropyLoss(reduction='mean')
     if model_name == 'cnn':
         model = CNN(num_classes=options['num_classes'], num_channels=options['num_channels'])
     elif model_name == 'logistic':
@@ -144,4 +161,4 @@ def choose_model_criterion(options):
 
     else:
         raise ValueError("Not support model: {}!".format(model_name))
-    return move_model_to(model, device=device), cri.to(device), eval_cri.to(device)
+    return move_model_to(model, device=device), cri.to(device)

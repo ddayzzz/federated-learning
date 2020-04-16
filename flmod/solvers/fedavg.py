@@ -6,10 +6,10 @@ from flmod.models.models import choose_model_criterion
 class FedAvg(BaseFedarated):
 
     def __init__(self, options, all_data_info):
-        model, crit, eval_crit = choose_model_criterion(options=options)
+        model, crit = choose_model_criterion(options=options)
         self.optimizer = torch.optim.SGD(model.parameters(), lr=options['lr'], momentum=0.5)
         super(FedAvg, self).__init__(options=options, model=model, dataset=all_data_info, optimizer=self.optimizer,
-                                     criterion=crit, eval_criterion=eval_crit)
+                                     criterion=crit)
         self.num_rounds = options['num_rounds']
         self.clients_per_round = options['clients_per_round']
         self.save_every_round = options['save_every']

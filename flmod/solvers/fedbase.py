@@ -11,7 +11,7 @@ from flmod.utils.metrics import Metrics
 
 class BaseFedarated(object):
 
-    def __init__(self, options, model, dataset, optimizer, criterion, eval_criterion, worker=None):
+    def __init__(self, options, model, dataset, optimizer, criterion, worker=None, append2metric=None):
         """
         定义联邦学习的基本的服务器, 这里的模型是在所有的客户端之间共享使用
         :param learner:
@@ -20,23 +20,22 @@ class BaseFedarated(object):
         """
         if worker is None:
             from flmod.models.worker import Worker
-            worker = Worker(model=model, criterion=criterion, eval_criterion=eval_criterion, optimizer=optimizer, options=options)
+            worker = Worker(model=model, criterion=criterion, optimizer=optimizer, options=options)
         self.worker = worker
         self.device = options['device']
         # 记录总共的训练数据
         self.num_train_data = 0
         self.clients = self.setup_clients(dataset=dataset,
                                           criterion=criterion,
-                                          eval_criterion=eval_criterion,
                                           worker=worker,
                                           batch_size=options['batch_size'])
         self.num_epochs = options['num_epochs']
-        self.latest_model = self.worker.get_flat_model_params()
+        self.latest_model = self.worker.get_flat_model_params().detach()
         self.name = '_'.join(['', f'wn{options["clients_per_round"]}', f'tn{len(self.clients)}'])
-        self.metrics = Metrics(clients=self.clients, options=options, name=self.name)
+        self.metrics = Metrics(clients=self.clients, options=options, name=self.name, append2suffix=append2metric)
         self.print_result = True
 
-    def setup_clients(self, dataset, criterion, eval_criterion, worker, batch_size):
+    def setup_clients(self, dataset, criterion, worker, batch_size):
         users, groups, train_data, test_data, entire_train_dataset, entire_test_dataset = dataset
         if entire_test_dataset is None and entire_train_dataset is not None:
             # train  和 test 的数据是合并的
@@ -51,7 +50,6 @@ class BaseFedarated(object):
                 self.num_train_data += len(train_data[user])
                 # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
                 c = BaseClient(id=user_id, worker=self.worker, batch_size=batch_size, criterion=criterion,
-                               eval_criterion=eval_criterion,
                                train_dataset=DatasetSplit(entire_train_dataset, idxs=train_data[user]['x_index']),
                                test_dataset=DatasetSplit(entire_train_dataset, test_data[user]['x_index']))
                 all_clients.append(c)
@@ -69,7 +67,6 @@ class BaseFedarated(object):
                     user_id = int(user)
                 self.num_train_data += len(train_data[user])
                 c = BaseClient(id=user_id, worker=self.worker, batch_size=batch_size, criterion=criterion,
-                               eval_criterion=eval_criterion,
                                train_dataset=MiniDataset(train_data[user]['x'], train_data[user]['y']),
                                test_dataset=MiniDataset(test_data[user]['x'], test_data[user]['y']))
                 all_clients.append(c)
@@ -88,13 +85,10 @@ class BaseFedarated(object):
                 self.num_train_data += len(train_data[user])
                 # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
                 c = BaseClient(id=user_id, worker=self.worker, batch_size=batch_size, criterion=criterion,
-                               eval_criterion=eval_criterion,
                                train_dataset=DatasetSplit(entire_train_dataset, idxs=train_data[user]['x_index']),
                                test_dataset=DatasetSplit(entire_test_dataset, test_data[user]['x_index']))
                 all_clients.append(c)
             return all_clients
-
-
 
     def local_train(self, selected_clients, round_i):
         solns = []  # Buffer for receiving client solutions
@@ -143,12 +137,11 @@ class BaseFedarated(object):
         """
         # flatten
         averaged_solution = torch.zeros_like(self.latest_model)
-        # averaged_solution = np.zeros(self.latest_model.shape)
-        num = 0
+        num_all_samples = 0
         for num_sample, local_solution in solns:
-            num += 1
-            averaged_solution += local_solution  # simply sum the flatten parameters
-        averaged_solution /= num  # divide the num of clients
+            num_all_samples += num_sample
+            averaged_solution += local_solution * num_sample # simply sum the flatten parameters
+        averaged_solution /= num_all_samples  # divide the num of clients
         return averaged_solution.detach()
 
     def test_latest_model_on_traindata(self, round_i):

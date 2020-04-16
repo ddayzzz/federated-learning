@@ -30,8 +30,10 @@ def generate_synthetic(alpha, beta, iid=True):
     y_split = [[] for _ in range(NUM_USER)]
 
     # prior for parameters
+    # 对应生成数据公式中 W 的采样, 即 W_k 的合集
     mean_W = np.random.normal(0, alpha, NUM_USER)
     mean_b = mean_W
+    # B_k
     B = np.random.normal(0, beta, NUM_USER)
     mean_x = np.zeros((NUM_USER, DIMENSION))
 

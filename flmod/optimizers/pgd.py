@@ -50,17 +50,17 @@ class PerturbedGradientDescent(Optimizer):
                 d_p = p.grad.data
                 if weight_decay != 0:
                     d_p.add_(weight_decay, p.data)
-                if momentum != 0:
-                    param_state = self.state[p]
-                    if 'momentum_buffer' not in param_state:
-                        buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
-                    else:
-                        buf = param_state['momentum_buffer']
-                        buf.mul_(momentum).add_(1 - dampening, d_p)
-                    if nesterov:
-                        d_p = d_p.add(momentum, buf)
-                    else:
-                        d_p = buf
+                # if momentum != 0:
+                #     param_state = self.state[p]
+                #     if 'momentum_buffer' not in param_state:
+                #         buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
+                #     else:
+                #         buf = param_state['momentum_buffer']
+                #         buf.mul_(momentum).add_(1 - dampening, d_p)
+                #     if nesterov:
+                #         d_p = d_p.add(momentum, buf)
+                #     else:
+                #         d_p = buf
                 if w_old is not None:
                     d_p.add_(mu, p.data - w_old_p.data)
                 p.data.add_(-group['lr'], d_p)
