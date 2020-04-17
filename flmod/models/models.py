@@ -1,3 +1,4 @@
+import numpy as np
 from torch import nn
 import torch
 import torch.nn.functional as F
@@ -130,10 +131,38 @@ class CifarCnn(nn.Module):
         return out
 
 
-class ShakespeareLSTM(nn.Module):
+class StackedLSTM(nn.Module):
 
-    def __init__(self, sequence_len, num_classes):
-        pass
+    def __init__(self, seq_len, num_classes, num_hidden, device):
+        super(StackedLSTM, self).__init__()
+        self.device = device
+        self.num_hidden = num_hidden
+        self.num_classes = num_classes
+        # 用于将文本数据转换为对应的词向量, sent 的实验中使用训练好的 glove 词向量
+        # emv 有一个记录权重的矩阵 [num_vocabulary, 8]. num_vocabulary 是句子中的字符的数量
+        # 输入 [*], 索引, 输出 [*, embedding_dim]
+        self.embedding_layer = nn.Embedding(num_embeddings=seq_len, embedding_dim=8)
+        torch.nn.init.xavier_uniform(self.embedding_layer.weight)
+        # 输入: (seq_len, batch, input_size), hx(2,batch,hidden_size)
+        # 输出: (seq_len, batch, num_directions * hidden_size), 如果 batch_first == True, 交换 0, 1
+        self.stacked_lstm = nn.LSTM(input_size=8,
+                                    hidden_size=num_hidden,
+                                    num_layers=2, batch_first=True)
+        self.fc = nn.Linear(in_features=self.num_hidden, out_features=num_classes)
+
+    def forward(self, inputs):
+        x = inputs
+        batch_size = x.size(0)
+        x = self.embedding_layer(x)
+        h0, c0 = torch.zeros(2, batch_size, self.num_hidden, device=self.device), \
+                 torch.zeros(2, batch_size, self.num_hidden, device=self.device)
+        # 将 embedding 前任嵌入的数据转换
+        x, _ = self.stacked_lstm(x, (h0, c0))
+        # 预测是那个人物, 用最后一句话?
+        x = x[:, -1, :]
+        x = self.fc(x)
+        return x
+
 
 def move_model_to(model, device):
     if not device.startswith('cpu'):
@@ -158,7 +187,18 @@ def choose_model_criterion(options):
         model = CNN(num_classes=options['num_classes'], num_channels=options['num_channels'])
     elif model_name == 'logistic':
         model = Logistic(options['input_shape'], options['num_class'])
-
+    elif model_name == 'stacked_lstm':
+        model = StackedLSTM(seq_len=options['seq_len'], num_classes=options['num_classes'], num_hidden=options['num_hidden'], device=options['device'])
     else:
         raise ValueError("Not support model: {}!".format(model_name))
     return move_model_to(model, device=device), cri.to(device)
+
+if __name__ == '__main__':
+    model = StackedLSTM(80,80,10,'cpu:0')
+    x = np.random.choice(8, 160).astype(np.int64).reshape([-1, 80])
+    pred = model(torch.from_numpy(x))
+    cri = nn.CrossEntropyLoss(reduction='mean')
+    y = torch.from_numpy(np.array([0,5], dtype=np.int64))
+    loss = cri(pred, y)
+    print(pred.detach().numpy().shape)
+    print(loss.item())

@@ -74,7 +74,7 @@ def read_data_pkl(train_data_dir, test_data_dir, sub_data=None):
 
 
 class MiniDataset(Dataset):
-    def __init__(self, data, labels):
+    def __init__(self, data, labels, options):
         """
         这个类在读取的 pkl 为实际的数据的时候用于将 dict 格式的数据转换为 Tensor
         :param data:

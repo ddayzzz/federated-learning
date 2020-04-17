@@ -19,7 +19,7 @@ class Worker(object):
         self.device = options['device']
         self.verbose = True
         self.flops, self.params_num, self.model_bytes = \
-            get_model_complexity_info(self.model, options['input_shape'], device=self.device)
+            get_model_complexity_info(self.model, options['input_shape'], device=self.device, input_type=options.get('input_type'))
         self.model_shape_info = model_parameters_shape_list(model)
 
     def get_model_params_dict(self):
@@ -55,6 +55,7 @@ class Worker(object):
         return from_flatten_to_parameter(self.model_shape_info, flat_params)
 
     def get_flat_grads(self, dataloader):
+        self.model.train()
         self.optimizer.zero_grad()
         loss, total_num = 0., 0
         for x, y in dataloader:

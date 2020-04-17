@@ -51,7 +51,8 @@ class BRATS2018Dataset(tdata.Dataset):
     def __getitem__(self, item):
         imgi = self._preprocess(np.load(self.inputs[item]))  # [H, W]
         imga = self._preprocess(np.load(self.annotations[item]))
-        return {'image': torch.from_numpy(imgi), 'mask': torch.from_numpy(imga)}
+        return imgi, imga
+        # return {'image': torch.from_numpy(imgi), 'mask': torch.from_numpy(imga)}
         # worker_info = tdata.get_worker_info()
         # if worker_info is None:
         #     start = self.start

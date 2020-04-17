@@ -1,6 +1,6 @@
 # GLOBAL PARAMETERS
 
-DATASETS = ['mnist', 'synthetic']
+DATASETS = ['mnist', 'synthetic', 'shakespeare']
 TRAINERS = {'fedavg': 'FedAvg', 'fedprox': 'FedProx'}
 OPTIMIZERS = TRAINERS.keys()
 
@@ -26,11 +26,13 @@ class ModelConfig(object):
                        }
             return sent140[model]
         elif dataset == 'shakespeare':
-            shakespeare = {'stacked_lstm': {'seq_len': 80, 'emb_dim': 80, 'num_hidden': 256}
-                           }
+            shakespeare = {'stacked_lstm': {'seq_len': 80, 'num_classes': 80, 'num_hidden': 256, 'input_shape': [80], 'input_type': 'index'}  # 句子的长度(转为对应的词汇的 index), 分类的数量, hidden
+                           }  # 后面两个用于测试
             return shakespeare[model]
         elif dataset == 'synthetic':
             return {'input_shape': 60, 'num_class': 10}
+        elif dataset == 'brats2018':
+            raise NotImplementedError
         else:
             raise ValueError('Not support dataset {}!'.format(dataset))
 
@@ -46,9 +48,18 @@ class ModelConfig(object):
                 return get_dataset(flatten_input=True)
             else:
                 return get_dataset(flatten_input=False)
+        elif dataset == 'shakespeare':
+            return None, None
         elif dataset == 'synthetic':
             return None, None
         else:
             raise ValueError('Not support dataset {}!'.format(dataset))
+
+    @staticmethod
+    def get_dataset_wrapper(dataset, options):
+        if dataset == 'shakespeare':
+            from flmod.dataset.shakespeare.shakespeare import Shakespeare
+            return Shakespeare
+        return None
 
 model_settings = ModelConfig()

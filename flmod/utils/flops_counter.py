@@ -9,11 +9,13 @@ import numpy as np
 __all__ = ['get_model_complexity_info', 'flops_to_string', 'params_to_string']
 
 
-def get_model_complexity_info(model, input_res, print_per_layer_stat=True, device='cpu:0'):
+def get_model_complexity_info(model, input_res, print_per_layer_stat=True, device='cpu:0', input_type=None):
     if isinstance(input_res, int):
         input_res = (input_res, )
-
-    batch = torch.FloatTensor(1, *input_res)
+    if input_type == 'index':
+        batch = torch.from_numpy(np.zeros((1,) + tuple(input_res), dtype=np.int64))
+    else:
+        batch = torch.FloatTensor(1, *input_res)
     batch = batch.to(device)
     flops_model = add_flops_counting_methods(model)
     flops_model.eval().start_flops_count()
