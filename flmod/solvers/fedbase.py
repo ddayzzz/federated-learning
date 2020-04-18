@@ -6,6 +6,7 @@ import torch
 from flmod.clients.base_client import BaseClient
 from flmod.utils.data_utils import DatasetSplit
 from flmod.utils.metrics import Metrics
+from flmod.models.workers import choose_worker
 
 
 class BaseFedarated(object):
@@ -17,10 +18,11 @@ class BaseFedarated(object):
         :param dataset:
         :param model:
         """
-        if worker is None:
-            from flmod.models.worker import Worker
-            worker = Worker(model=model, criterion=criterion, optimizer=optimizer, options=options)
-        self.worker = worker
+        # if worker is None:
+        #     from flmod.models.workers import Worker
+        #     worker = Worker(model=model, criterion=criterion, optimizer=optimizer, options=options)
+        worker_class = choose_worker(options)
+        self.worker = worker_class(model=model, criterion=criterion, optimizer=optimizer, options=options)
         self.device = options['device']
         # 记录总共的训练数据
         self.num_train_data = 0
@@ -37,29 +39,32 @@ class BaseFedarated(object):
 
 
     def setup_clients(self, dataset, criterion, worker, batch_size):
-        users, groups, train_data, test_data, entire_train_dataset, entire_test_dataset, dataset_wrapper = dataset
+        users, groups, train_data, test_data, entire_train_dataset, entire_test_dataset, dataset_cfg = dataset
+        # 配置相关的参数
+        dataset_wrapper = dataset_cfg.get('dataset_wrapper')
         if dataset_wrapper is None:
             from flmod.utils.worker_utils import MiniDataset
             dataset_wrapper = MiniDataset
+
         if entire_test_dataset is None and entire_train_dataset is not None:
             # train  和 test 的数据是合并的
             if len(groups) == 0:
                 groups = [None for _ in users]
             all_clients = []
             for user, group in zip(users, groups):
-                if isinstance(user, str) and len(user) >= 5:
-                    user_id = int(user[-5:])
-                else:
-                    user_id = int(user)
+                # if isinstance(user, str) and len(user) >= 5:
+                #     user_id = int(user[-5:])
+                # else:
+                #     user_id = int(user)
                 self.num_train_data += len(train_data[user])
                 # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
-                c = BaseClient(id=user_id, worker=self.worker, batch_size=batch_size, criterion=criterion,
+                c = BaseClient(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
                                train_dataset=DatasetSplit(entire_train_dataset, idxs=train_data[user]['x_index']),
                                test_dataset=DatasetSplit(entire_train_dataset, test_data[user]['x_index']))
                 all_clients.append(c)
             return all_clients
         elif entire_test_dataset is None and entire_train_dataset is None:
-            # 没有 index 的数据, train 和 test,
+            # 没有 index 的数据, train 和 test 包含了所有的数据
             if len(groups) == 0:
                 groups = [None for _ in users]
 
@@ -71,8 +76,8 @@ class BaseFedarated(object):
                 #     user_id = int(user)
                 self.num_train_data += len(train_data[user])
                 c = BaseClient(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
-                               train_dataset=dataset_wrapper(train_data[user]['x'], train_data[user]['y'], options=self.options),
-                               test_dataset=dataset_wrapper(test_data[user]['x'], test_data[user]['y'], options=self.options))
+                               train_dataset=dataset_wrapper(train_data[user], options=self.options),
+                               test_dataset=dataset_wrapper(test_data[user], options=self.options))
                 all_clients.append(c)
             return all_clients
         else:
@@ -82,13 +87,13 @@ class BaseFedarated(object):
 
             all_clients = []
             for user, group in zip(users, groups):
-                if isinstance(user, str) and len(user) >= 5:
-                    user_id = int(user[-5:])
-                else:
-                    user_id = int(user)
+                # if isinstance(user, str) and len(user) >= 5:
+                #     user_id = int(user[-5:])
+                # else:
+                #     user_id = int(user)
                 self.num_train_data += len(train_data[user])
                 # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
-                c = BaseClient(id=user_id, worker=self.worker, batch_size=batch_size, criterion=criterion,
+                c = BaseClient(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
                                train_dataset=DatasetSplit(entire_train_dataset, idxs=train_data[user]['x_index']),
                                test_dataset=DatasetSplit(entire_test_dataset, test_data[user]['x_index']))
                 all_clients.append(c)

@@ -74,15 +74,16 @@ def read_data_pkl(train_data_dir, test_data_dir, sub_data=None):
 
 
 class MiniDataset(Dataset):
-    def __init__(self, data, labels, options):
+    def __init__(self, data, options):
         """
         这个类在读取的 pkl 为实际的数据的时候用于将 dict 格式的数据转换为 Tensor
         :param data:
         :param labels:
         """
         super(MiniDataset, self).__init__()
-        self.data = np.array(data)
-        self.labels = np.array(labels).astype("int64")
+        # TODO 默认直接处理数据
+        self.data = np.array(data['x'])
+        self.labels = np.array(data['y']).astype("int64")
 
         if self.data.ndim == 4 and self.data.shape[3] == 3:
             self.data = self.data.astype("uint8")

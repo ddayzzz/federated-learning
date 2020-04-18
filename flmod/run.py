@@ -122,7 +122,7 @@ def main():
     all_data_info, (train_dataset, test_datatset) = read_data_pkl(train_path, test_path, sub_data=sub_data), \
                                                     model_settings.get_entire_dataset(dataset_name, options=options)
     all_data_info = list(all_data_info)
-    all_data_info.extend([train_dataset, test_datatset, model_settings.get_dataset_wrapper(dataset_name, options=options)])
+    all_data_info.extend([train_dataset, test_datatset, model_settings.dataset_config(dataset_name, options=options)])
     # Call appropriate trainer
     trainer = trainer_class(options, all_data_info)
     trainer.train()

@@ -1,7 +1,7 @@
 # GLOBAL PARAMETERS
 
-DATASETS = ['mnist', 'synthetic', 'shakespeare']
-TRAINERS = {'fedavg': 'FedAvg', 'fedprox': 'FedProx'}
+DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018']
+TRAINERS = {'fedavg': 'FedAvg', 'fedprox': 'FedProx', 'fedprox_non_grad': 'FedProxNonGrad'}
 OPTIMIZERS = TRAINERS.keys()
 
 
@@ -32,7 +32,8 @@ class ModelConfig(object):
         elif dataset == 'synthetic':
             return {'input_shape': 60, 'num_class': 10}
         elif dataset == 'brats2018':
-            raise NotImplementedError
+            brats2018 = {'unet': {'num_classes': 1, 'input_shape': [1, 128, 128], 'num_channels': 1, 'bilinear': True}}
+            return brats2018[model]
         else:
             raise ValueError('Not support dataset {}!'.format(dataset))
 
@@ -48,18 +49,20 @@ class ModelConfig(object):
                 return get_dataset(flatten_input=True)
             else:
                 return get_dataset(flatten_input=False)
-        elif dataset == 'shakespeare':
-            return None, None
-        elif dataset == 'synthetic':
+        elif dataset in ['synthetic', 'shakespeare', 'brats2018']:
             return None, None
         else:
             raise ValueError('Not support dataset {}!'.format(dataset))
 
     @staticmethod
-    def get_dataset_wrapper(dataset, options):
+    def dataset_config(dataset, options):
+        cfg = {'data_wrapper': None, 'worker': None}
         if dataset == 'shakespeare':
             from flmod.dataset.shakespeare.shakespeare import Shakespeare
-            return Shakespeare
-        return None
+            cfg['dataset_wrapper'] = Shakespeare
+        elif dataset == 'brats2018':
+            from flmod.dataset.brats2018.brats2018_dataset import BRATS2018Dataset
+            cfg['dataset_wrapper'] = BRATS2018Dataset
+        return cfg
 
 model_settings = ModelConfig()

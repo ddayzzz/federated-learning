@@ -189,6 +189,12 @@ def choose_model_criterion(options):
         model = Logistic(options['input_shape'], options['num_class'])
     elif model_name == 'stacked_lstm':
         model = StackedLSTM(seq_len=options['seq_len'], num_classes=options['num_classes'], num_hidden=options['num_hidden'], device=options['device'])
+    elif model_name == 'unet':
+        from flmod.models.unet import UNet
+        model = UNet(n_channels=options['num_channels'], n_classes=options['num_classes'], bilinear=options['bilinear'])
+        if model.n_classes <= 1:
+            # 二分类使用 BCE, 多分类用 CrossEntropy
+            cri = nn.BCEWithLogitsLoss(reduction='mean')
     else:
         raise ValueError("Not support model: {}!".format(model_name))
     return move_model_to(model, device=device), cri.to(device)

@@ -2,7 +2,7 @@ from flmod.utils.torch_utils import get_flat_params_from, set_flat_params_to, ge
 from flmod.utils.flops_counter import get_model_complexity_info
 import tqdm
 import torch
-
+from flmod.models.dice import bchw_dice_coeff
 
 class Worker(object):
     """
@@ -55,6 +55,7 @@ class Worker(object):
         return from_flatten_to_parameter(self.model_shape_info, flat_params)
 
     def get_flat_grads(self, dataloader):
+        # TODO 如果样本太多可能会造成 CUDA 显存不足
         self.model.train()
         self.optimizer.zero_grad()
         loss, total_num = 0., 0
@@ -149,3 +150,96 @@ class Worker(object):
 
     def save(self, path):
         torch.save(self.get_model_params_dict(), path)
+
+
+class SegmentationWorker(Worker):
+
+    def __init__(self, model, criterion, optimizer, options):
+        super(SegmentationWorker, self).__init__(model, criterion, optimizer, options)
+
+    def local_train(self, num_epochs, train_dataloader, round_i, client_id):
+        """Train model locally and return new parameter and computation cost
+
+        Args:
+            train_dataloader: DataLoader class in Pytorch
+
+        Returns
+            1. local_solution: updated new parameter
+            2. stat: Dict, contain stats
+                2.1 comp: total FLOPS, computed by (# epoch) * (# data) * (# one-shot FLOPS)
+                2.2 loss
+        """
+        self.model.train()
+        with tqdm.trange(num_epochs) as t:
+            train_loss = dcs = train_total = 0
+            for epoch in t:
+                t.set_description(f'Client: {client_id}, Round: {round_i + 1}, Epoch :{epoch + 1}')
+                for batch_idx, (x, y) in enumerate(train_dataloader):
+                    # from IPython import embed
+                    # embed()
+                    x, y = x.to(self.device), y.to(self.device)
+
+                    self.optimizer.zero_grad()
+                    pred = self.model(x)
+
+                    if torch.isnan(pred.max()):
+                        from IPython import embed
+                        embed()
+
+                    loss = self.criterion(pred, y)
+                    loss.backward()
+                    # torch.nn.utils.clip_grad_norm(self.model.parameters(), 60)
+                    self.optimizer.step()
+                    # 分割使用的 DC
+                    mask = (pred > 0.5).float().detach()
+                    dcs += bchw_dice_coeff(mask, y).item()
+                    target_size = y.size(0)
+                    # TODO 一般的损失函数会进行平均(mean), 但是这里不需要, 一种做法是指定损失函数仅仅用 sum, 但是考虑到pytorch中的损失函数默认为mean,故这里进行了些修改
+                    single_batch_loss = loss.item() * target_size
+                    train_loss += single_batch_loss
+                    train_total += target_size
+                    if self.verbose and (batch_idx % 10 == 0):
+                        # 纯数值, 这里使用平均的损失
+                        t.set_postfix(mean_loss=loss.item())
+
+            local_solution = self.get_flat_model_params()
+            # 计算模型的参数值
+            param_dict = {"norm": torch.norm(local_solution).item(),
+                          "max": local_solution.max().item(),
+                          "min": local_solution.min().item()}
+            comp = num_epochs * train_total * self.flops
+            return_dict = {"comp": comp,
+                           "loss": train_loss / train_total,
+                           "acc": dcs / train_total}
+            return_dict.update(param_dict)
+            return local_solution, return_dict
+
+    def local_test(self, test_dataloader):
+        self.model.eval()
+        test_loss = test_total = 0.
+        dc = 0.0
+        with torch.no_grad():
+            for x, y in test_dataloader:
+                # print("test")
+                # from IPython import embed
+                # embed()
+                x, y = x.to(self.device), y.to(self.device)
+
+                pred = self.model(x)
+                loss = self.criterion(pred, y)
+
+                mask = (pred > 0.5).float().detach()
+                dc += bchw_dice_coeff(mask, y).item()
+
+                size = y.size(0)
+                test_loss += loss.item() * size  # 需要乘以数据的维度, 最后除以总数量得到平均的损失
+                test_total += size
+
+        return dc, test_loss
+
+
+def choose_worker(options):
+    default = Worker
+    if options['model'] in ['unet']:
+        default = SegmentationWorker
+    return default

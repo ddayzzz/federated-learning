@@ -9,16 +9,15 @@ class BaseClient(object):
         定义基本的客户端
         :param model:
         """
-        self.train_data_loader = DataLoader(train_dataset,
-                                            batch_size=batch_size, shuffle=True)
-        self.test_data_loader = DataLoader(test_dataset,
-                                           batch_size=batch_size, shuffle=False)
-
         self.id = id
         self.criterion = criterion
-        self.num_train_data = len(self.train_data_loader.dataset)
-        self.num_test_data = len(self.test_data_loader.dataset)
+        self.num_train_data = len(train_dataset)
+        self.num_test_data = len(test_dataset)
         self.worker = worker
+        self.train_data_loader = DataLoader(train_dataset,
+                                            batch_size=batch_size, shuffle=True, num_workers=2)
+        self.test_data_loader = DataLoader(test_dataset,
+                                           batch_size=batch_size, shuffle=False)
 
     def get_model_params(self):
         """Get model parameters"""
