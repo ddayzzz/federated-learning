@@ -107,21 +107,22 @@ def bag_of_words(line, vocab):
 
 class Shakespeare(Dataset):
 
-    def __init__(self, data, labels, options):
+    def __init__(self, data, options):
         """
         这个类在读取的 pkl 为实际的数据的时候用于将 dict 格式的数据转换为 Tensor
         :param data:
         :param labels:
         """
         super(Shakespeare, self).__init__()
+        sentence, label = data['x'], data['y']
         # 句子的序列, 长度为 80
         # 标记, 一个字符, 需要给出他的 index
         # 先试试能否一开始预处理, 这个和 tf 版本不一样, label 不需要 one-hot
-        sentences_to_indices = [word_to_indices(word) for word in data]
+        sentences_to_indices = [word_to_indices(word) for word in sentence]
         sentences_to_indices = np.array(sentences_to_indices)
         self.sentences_to_indices = np.array(sentences_to_indices, dtype=np.int64)
         # 处理标记, pytorch 不知道为什么要 int64 的数据作为 label 了
-        self.labels = np.array([letter_to_index(letter) for letter in labels], dtype=np.int64)
+        self.labels = np.array([letter_to_index(letter) for letter in label], dtype=np.int64)
 
     def __len__(self):
         return len(self.labels)

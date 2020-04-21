@@ -84,11 +84,12 @@ class FedProxNonGrad(BaseFedarated):
 
             if (round_i + 1) % self.save_every_round == 0:
                 self.save_model(round_i)
+                self.metrics.write()
             # 写入 mu  和 lr
             # lr = self.optimizer.get_current_lr()
             # mu = self.optimizer.get_mu()
             # self.metrics.update_custom_scalars(round_i, lr=lr, mu=mu)
 
-        self.test_latest_model_on_traindata(self.num_rounds)
+        # self.test_latest_model_on_traindata(self.num_rounds)
         self.test_latest_model_on_evaldata(self.num_rounds)
         self.metrics.write()

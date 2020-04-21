@@ -38,5 +38,7 @@ def plot(dataset, *args):
 
 if __name__ == '__main__':
     # dataset = 'mnist_user1000_niid_0_keep_10_train_9'
-    dataset = 'synthetic_alpha0_beta0_iid'
-    plot(dataset, 'graddiff_on_train_data', 'loss_on_eval_data', 'acc_on_eval_data')
+    # dataset = 'synthetic_alpha0_beta0_iid'
+    dataset = 'brats2018_train_9_test_1'
+    plot(dataset, 'loss_on_eval_data', 'acc_on_eval_data')
+    # plot(dataset, 'graddiff_on_train_data', 'loss_on_eval_data', 'acc_on_eval_data')

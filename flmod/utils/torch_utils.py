@@ -114,3 +114,56 @@ def get_flat_grad(output, inputs, filter_input_ids=set(), retain_graph=False, cr
     for param in params:
         param.grad = None
     return grads
+
+
+def get_flat_grad_from_sparse(output, inputs, filter_input_ids=set(), retain_graph=False, create_graph=False):
+    """
+    用于 Shakespeare 数据集
+    :param output:
+    :param inputs:
+    :param filter_input_ids:
+    :param retain_graph:
+    :param create_graph:
+    :return:
+    """
+    if create_graph:
+        retain_graph = True
+
+    inputs = list(inputs)
+    params = []
+    for i, param in enumerate(inputs):
+        if i not in filter_input_ids:
+            params.append(param)
+
+    grads = torch.autograd.grad(output, params, retain_graph=retain_graph, create_graph=create_graph)
+
+    j = 0
+    out_grads = []
+    for i, param in enumerate(inputs):
+        if i in filter_input_ids:
+            out_grads.append(zeros(param.data.view(-1).shape))
+        else:
+            out_grads.append(grads[j].view(-1))
+            j += 1
+    grads = torch.cat(out_grads)
+
+    for param in params:
+        # 去掉后续可能会计入图的操作
+        param.grad = None
+    # 开始处理(这里的 sparse 似乎和 embedding 有关, embedding 的 sparse 暂时为False, embedding 的梯度形状 [seq_lem, embedding_dim])
+    # 这里的 grad0 是来自于 https://www.tensorflow.org/versions/r1.15/api_docs/python/tf/IndexedSlices
+    # 一个解释: https://www.zhihu.com/question/277403551
+    # torch sparse: https://pytorch.org/docs/stable/sparse.html
+    # 目前不使用 sparse
+    # 的元素, 可能是 embedding 的缘故
+    # dense[slices.indices[i], :, :, :, ...] = slices.values[i, :, :, :, ...], sliced 即为 grads[0]
+    # indices = grads[0].indices
+    # values = grads[0].values
+    # first_layer_dense = np.zeros((80, 8))
+    # for i in range(indices.shape[0]):
+    #     first_layer_dense[indices[i], :] = values[i, :]
+    # # 其他的梯度
+    # client_grads = first_layer_dense
+    # for i in range(1, len(grads)):
+    #     client_grads = np.append(client_grads, grads[i])  # output a flattened array
+    return grads

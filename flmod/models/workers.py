@@ -1,8 +1,11 @@
 from flmod.utils.torch_utils import get_flat_params_from, set_flat_params_to, get_flat_grad, model_parameters_shape_list, from_flatten_to_parameter
 from flmod.utils.flops_counter import get_model_complexity_info
 import tqdm
+import numpy as np
 import torch
 from flmod.models.dice import bchw_dice_coeff
+from flmod.utils.torch_utils import get_flat_grad_from_sparse
+
 
 class Worker(object):
     """
@@ -54,19 +57,53 @@ class Worker(object):
     def to_model_params(self, flat_params):
         return from_flatten_to_parameter(self.model_shape_info, flat_params)
 
-    def get_flat_grads(self, dataloader):
-        # TODO 如果样本太多可能会造成 CUDA 显存不足
+    def get_flat_grads(self, dataloader, mini_batchsize=None, grad_processor=get_flat_grad):
+        """
+        获取梯度, 结构扁平化
+        :param dataloader: 数据加载器
+        :param use_alldata: 是否使用全部的数据. 如果是,则安州某个批次的大小计算梯度
+        :return:
+        """
+        dataset = dataloader.dataset
+        num_samples = len(dataset)
         self.model.train()
         self.optimizer.zero_grad()
-        loss, total_num = 0., 0
-        for x, y in dataloader:
-            x, y = x.to(self.device), y.to(self.device)
+        loss, total_num = 0.0, 0
+        if mini_batchsize is None or (num_samples < mini_batchsize):
+            for x, y in dataloader:
+                x, y = x.to(self.device), y.to(self.device)
+                pred = self.model(x)
+                loss += self.criterion(pred, y) * y.size(0)
+                total_num += y.size(0)
+            loss /= total_num
+            flat_grads = grad_processor(loss, self.model.parameters(), create_graph=True)
+            return flat_grads.cpu().detach(), total_num
+        # 我觉得也可以通过将i
+        flatted_grads = torch.zeros(self.params_num, dtype=torch.float32)
+        rds = min(int(num_samples / mini_batchsize), 4)
+        for i in range(rds):
+            # 自行累计样本 batch
+            x = []
+            y = []
+            for i in range(mini_batchsize * i, mini_batchsize * (i + 1)):
+                img, label = dataset[i]
+                x.append(img)
+                y.append(label)
+            x = torch.from_numpy(np.stack(x, axis=0)).to(self.device)
+            y = torch.from_numpy(np.stack(y, axis=0)).to(self.device)
             pred = self.model(x)
-            loss += self.criterion(pred, y) * y.size(0)
-            total_num += y.size(0)
-        loss /= total_num
-        flat_grads = get_flat_grad(loss, self.model.parameters(), create_graph=True)
-        return flat_grads
+            # 平均的 loss
+            batch_size = y.size(0)
+            loss += self.criterion(pred, y) * batch_size
+            #
+            total_num += batch_size
+            grads = grad_processor(loss, self.model.parameters(), create_graph=True)
+            flatted_grads = flatted_grads + grads.cpu().detach()
+        # 这个梯度除以运行的batch的次数, 因为loss是平均的
+        # flatted_grads = flatted_grads / rds
+        flatted_grads = flatted_grads / total_num
+        return flatted_grads, total_num
+
 
     def local_train(self, num_epochs, train_dataloader, round_i, client_id):
         """Train model locally and return new parameter and computation cost
@@ -238,8 +275,21 @@ class SegmentationWorker(Worker):
         return dc, test_loss
 
 
+class StackedLSTMWorker(Worker):
+
+    def __init__(self, model, criterion, optimizer, options):
+        super(StackedLSTMWorker, self).__init__(model, criterion, optimizer, options)
+
+    def get_flat_grads(self, dataloader, mini_batchsize=50, grad_processor=get_flat_grad_from_sparse):
+        grads = super(StackedLSTMWorker, self).get_flat_grads(dataloader, mini_batchsize, grad_processor=grad_processor)
+        # 必须处理 spares 的梯度
+        return grads
+
+
+
 def choose_worker(options):
-    default = Worker
-    if options['model'] in ['unet']:
-        default = SegmentationWorker
-    return default
+    workers = {
+        'unet': SegmentationWorker,
+        'stacked_lstm': StackedLSTMWorker
+    }
+    return workers.get(options['model'], Worker)

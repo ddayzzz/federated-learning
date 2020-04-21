@@ -141,7 +141,8 @@ class StackedLSTM(nn.Module):
         # 用于将文本数据转换为对应的词向量, sent 的实验中使用训练好的 glove 词向量
         # emv 有一个记录权重的矩阵 [num_vocabulary, 8]. num_vocabulary 是句子中的字符的数量
         # 输入 [*], 索引, 输出 [*, embedding_dim]
-        self.embedding_layer = nn.Embedding(num_embeddings=seq_len, embedding_dim=8)
+        # TODO sparse 参数可以影响梯度的计算, 请注意
+        self.embedding_layer = nn.Embedding(num_embeddings=seq_len, embedding_dim=8, sparse=False)
         torch.nn.init.xavier_uniform(self.embedding_layer.weight)
         # 输入: (seq_len, batch, input_size), hx(2,batch,hidden_size)
         # 输出: (seq_len, batch, num_directions * hidden_size), 如果 batch_first == True, 交换 0, 1

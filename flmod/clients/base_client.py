@@ -1,4 +1,5 @@
 import time
+import numpy as np
 from torch.utils.data import DataLoader
 
 
@@ -35,8 +36,11 @@ class BaseClient(object):
 
     def get_flat_grads(self):
         """Get model gradient"""
-        grad_in_tensor = self.worker.get_flat_grads(self.train_data_loader)
-        return grad_in_tensor.cpu().detach().numpy()
+        grad_in_tensor, total_samples = self.worker.get_flat_grads(self.train_data_loader)
+        # if not isinstance(grad_in_tensor, np.ndarray):
+        #     grad_in_tensor = grad_in_tensor.cpu().detach().numpy()
+        grad_in_tensor = grad_in_tensor.numpy()
+        return grad_in_tensor, total_samples
 
     def solve_grad(self):
         """Get model gradient with cost"""
@@ -46,9 +50,9 @@ class BaseClient(object):
         stats = {'id': self.id, 'bytes_w': bytes_w,
                  'comp': comp, 'bytes_r': bytes_r}
 
-        grads = self.get_flat_grads()  # Return grad in numpy array
+        grads, total_samples = self.get_flat_grads()  # Return grad in numpy array
 
-        return (self.num_train_data, grads), stats
+        return (total_samples, grads), stats
 
     def local_train(self, round_i, num_epochs, **kwargs):
         """Solves local optimization problem
