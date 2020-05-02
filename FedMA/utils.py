@@ -1204,16 +1204,18 @@ def pdm_prepare_weights_vggs(nets, device="cpu"):
 def pdm_prepare_freq(cls_freqs, n_classes):
     """
 
-    :param cls_freqs:
-    :param n_classes:
+    :param cls_freqs: 客户端->{类别->数量}
+    :param n_classes: 数量
     :return:
     """
     freqs = []
 
     for net_i in sorted(cls_freqs.keys()):
+        # cls_feqs 有的类没有, 这里扩展一下
         net_freqs = [0] * n_classes
 
         for cls_i in cls_freqs[net_i]:
+            #  cls_i 是类别
             net_freqs[cls_i] = cls_freqs[net_i][cls_i]
 
         freqs.append(np.array(net_freqs))

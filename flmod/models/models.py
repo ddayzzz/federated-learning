@@ -6,14 +6,14 @@ import math
 
 
 class Logistic(nn.Module):
-    def __init__(self, in_dim, out_dim):
+    def __init__(self, in_dim, out_dim, weight_init=torch.nn.init.xavier_uniform):
         super(Logistic, self).__init__()
         self.layer = nn.Linear(in_dim, out_dim)
         # 初始化, 这个初始化和 tf.layers.dense 和 tf.get_variable(用于 weight)相同,
         # https://www.tensorflow.org/api_docs/python/tf/compat/v1/get_variable
         # https://zhuanlan.zhihu.com/p/72853886
         # https://www.tensorflow.org/api_docs/python/tf/compat/v1/layers/dense
-        torch.nn.init.xavier_uniform(self.layer.weight)
+        weight_init(self.layer.weight)
         self.layer.bias.data.fill_(0)
         # 顺序和 parameters 一样
         # pt_latest_w = torch.from_numpy(np.zeros([10, 784], dtype=np.float32))
@@ -180,14 +180,18 @@ def choose_model_criterion(options):
     :return: model. train criterion, test criterion
     """
     model_name = str(options['model']).lower()
-
+    algo = options['algo']
     device = options['device']
     # TODO 一般是这个
     cri = nn.CrossEntropyLoss(reduction='mean')
     if model_name == 'cnn':
         model = CNN(num_classes=options['num_classes'], num_channels=options['num_channels'])
     elif model_name == 'logistic':
-        model = Logistic(options['input_shape'], options['num_class'])
+        if algo == 'fedavg_schemes':
+            model = Logistic(options['input_shape'], options['num_class'], weight_init=torch.nn.init.zeros_)
+        else:
+            # 默认使用类似于 tensorflow 的权重初始化方式
+            model = Logistic(options['input_shape'], options['num_class'])
     elif model_name == 'stacked_lstm':
         model = StackedLSTM(seq_len=options['seq_len'], num_classes=options['num_classes'], num_hidden=options['num_hidden'], device=options['device'])
     elif model_name == 'unet':

@@ -10,18 +10,11 @@ class FedProx(BaseFedarated):
 
     def __init__(self, options, all_data_info):
         model, crit = choose_model_criterion(options=options)
-        self.optimizer = PerturbedGradientDescent(model.parameters(), lr=options['lr'], momentum=0.5, mu=options['mu'])
+        self.optimizer = PerturbedGradientDescent(model.parameters(), lr=options['lr'], mu=options['mu'], weight_decay=options['wd'])
         suffix = f'mu{options["mu"]}_dp{options["drop_rate"]}'
         super(FedProx, self).__init__(options=options, model=model, dataset=all_data_info, optimizer=self.optimizer,
                                      criterion=crit, append2metric=suffix)
         self.drop_rate = options['drop_rate']
-        self.num_rounds = options['num_rounds']
-        self.clients_per_round = options['clients_per_round']
-        self.save_every_round = options['save_every']
-        self.eval_on_test_every_round = options['eval_every']
-        self.eval_on_train_every_round = options['eval_train_every']
-        self.num_epochs = options['num_epochs']
-        self.num_clients = len(self.clients)
         # 保存当前的模型的参数, 在聚合之前的
 
     def select_clients(self, round, num_clients=20):
@@ -54,7 +47,11 @@ class FedProx(BaseFedarated):
     def train(self):
         for round_i in range(self.num_rounds):
             print(f'>>> Global Training Round : {round_i + 1}')
+            # eval on test
+            if (round_i + 1) % self.eval_on_test_every_round == 0:
+                self.test_latest_model_on_evaldata(round_i)
             if (round_i + 1) % self.eval_on_train_every_round == 0:
+                # 仅仅计算梯度
                 self.calc_client_grads(round_i)
             selected_clients_indices = self.select_clients(round=round_i, num_clients=self.clients_per_round)
             activated_clients_indx = np.random.choice(selected_clients_indices, round(self.clients_per_round * (1 - self.drop_rate)), replace=False)
@@ -77,13 +74,9 @@ class FedProx(BaseFedarated):
 
             # update global weights
             self.latest_model = self.aggregate(solns)
-
-            # eval on test
-            if (round_i + 1) % self.eval_on_test_every_round == 0:
-                self.test_latest_model_on_evaldata(round_i)
-
             if (round_i + 1) % self.save_every_round == 0:
                 self.save_model(round_i)
+                self.metrics.write()
             # 写入 mu  和 lr
             # lr = self.optimizer.get_current_lr()
             # mu = self.optimizer.get_mu()

@@ -5,75 +5,12 @@ import torch
 import os
 import random
 from flmod.utils.worker_utils import read_data_pkl
-from flmod.config import OPTIMIZERS, DATASETS, TRAINERS
+from flmod.config import DATASETS, TRAINERS
 from flmod.config import model_settings
-
+from flmod.config import base_options
 
 def read_options():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('--algo',
-                        help='name of trainer;',
-                        type=str,
-                        choices=OPTIMIZERS,
-                        default='fedavg')
-    parser.add_argument('--dataset',
-                        help='name of dataset;',
-                        type=str,
-                        default='mnist_all_data_0_equal_niid')
-    parser.add_argument('--model',
-                        help='name of model;',
-                        type=str,
-                        default='logistic')
-    parser.add_argument('--wd',
-                        help='weight decay parameter;',
-                        type=float,
-                        default=0.001)
-    parser.add_argument('--device',
-                        help='device',
-                        default='cpu:0',
-                        type=str)
-    parser.add_argument('--num_rounds',
-                        help='number of rounds to simulate;',
-                        type=int,
-                        default=200)
-    parser.add_argument('--eval_every',
-                        help='evaluate every ____ rounds;',
-                        type=int,
-                        default=1)
-    parser.add_argument('--eval_train_every', type=int, default=5, help='evaluate on while train dataset every ___ round')
-    parser.add_argument('--save_every',
-                        help='save global model every ____ rounds;',
-                        type=int,
-                        default=50)
-    parser.add_argument('--clients_per_round',
-                        help='number of clients trained per round;',
-                        type=int,
-                        default=10)
-    parser.add_argument('--batch_size',
-                        help='batch size when clients train on data;',
-                        type=int,
-                        default=10)
-    parser.add_argument('--num_epochs',
-                        help='number of epochs when clients train on data;',
-                        type=int,
-                        default=20)
-    parser.add_argument('--drop_rate',
-                        help='number of epochs when clients train on data;',
-                        type=float,
-                        default=0.0)
-    parser.add_argument('--mu',
-                        help='mu',
-                        type=float,
-                        default=0.0)
-    parser.add_argument('--lr',
-                        help='learning rate for inner solver;',
-                        type=float,
-                        default=0.01)
-    parser.add_argument('--seed',
-                        help='seed for randomness;',
-                        type=int,
-                        default=0)
+    parser = base_options()
     parsed = parser.parse_args()
     options = parsed.__dict__
     # Set seeds

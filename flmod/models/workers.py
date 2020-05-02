@@ -286,10 +286,79 @@ class StackedLSTMWorker(Worker):
         return grads
 
 
+class LRDecayWorker(Worker):
+
+    def __init__(self, model, criterion, optimizer, options):
+        super(LRDecayWorker, self).__init__(model, criterion, optimizer, options)
+
+    def local_train(self, num_epochs, train_dataloader, round_i, client_id):
+        """
+        按照 ICLR2020 给出的模式训练,重点是 epoch 为何要乘以10?
+        :param num_epochs:
+        :param train_dataloader:
+        :param round_i:
+        :param client_id:
+        :return:
+        """
+        # TODO 以下的代码仅仅是修改了 clip 的选项
+        self.model.train()
+        with tqdm.trange(num_epochs) as t:
+            train_loss = train_acc = train_total = 0
+            for epoch in t:
+                t.set_description(f'Client: {client_id}, Round: {round_i + 1}, Epoch :{epoch + 1}')
+                for batch_idx, (x, y) in enumerate(train_dataloader):
+                    # from IPython import embed
+                    # embed()
+                    x, y = x.to(self.device), y.to(self.device)
+
+                    self.optimizer.zero_grad()
+                    pred = self.model(x)
+
+                    if torch.isnan(pred.max()):
+                        from IPython import embed
+                        embed()
+
+                    loss = self.criterion(pred, y)
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm(self.model.parameters(), 60)
+                    self.optimizer.step()
+
+                    _, predicted = torch.max(pred, 1)
+                    correct = predicted.eq(y).sum().item()
+
+                    target_size = y.size(0)
+                    # TODO 一般的损失函数会进行平均(mean), 但是这里不需要, 一种做法是指定损失函数仅仅用 sum, 但是考虑到pytorch中的损失函数默认为mean,故这里进行了些修改
+                    single_batch_loss = loss.item() * target_size
+                    train_loss += single_batch_loss
+                    train_acc += correct
+                    train_total += target_size
+                    if self.verbose and (batch_idx % 10 == 0):
+                        # 纯数值, 这里使用平均的损失
+                        t.set_postfix(mean_loss=loss.item())
+
+            local_solution = self.get_flat_model_params()
+            # 计算模型的参数值
+            param_dict = {"norm": torch.norm(local_solution).item(),
+                          "max": local_solution.max().item(),
+                          "min": local_solution.min().item()}
+            comp = num_epochs * train_total * self.flops
+            return_dict = {"comp": comp,
+                           "loss": train_loss / train_total,
+                           "acc": train_acc / train_total}
+            return_dict.update(param_dict)
+            return local_solution, return_dict
+
+
 
 def choose_worker(options):
-    workers = {
-        'unet': SegmentationWorker,
-        'stacked_lstm': StackedLSTMWorker
-    }
-    return workers.get(options['model'], Worker)
+    model = options['model']
+    algo = options['algo']
+    if model == 'unet':
+        return SegmentationWorker
+    elif model == 'stacked_lstm':
+        return StackedLSTMWorker
+    elif model == 'logistic':
+        workers = {'fedavg_schemes': LRDecayWorker}
+        return workers.get(algo, Worker)
+    else:
+        raise ValueError('No suitable worker!')

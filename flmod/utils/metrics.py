@@ -38,11 +38,12 @@ class Metrics(object):
         #                                             options['num_epoch'],
         #                                             options['batch_size'],
         #                                             'w' if options['noaverage'] else 'a')
-        suffix = '{}_sd{}_lr{}_ep{}_bs{}'.format(name,
-                                                    options['seed'],
-                                                    options['lr'],
-                                                    options['num_epochs'],
-                                                    options['batch_size'])
+        suffix = '{}_sd{}_lr{}_ep{}_bs{}_wd{}'.format(name,
+                                                      options['seed'],
+                                                      options['lr'],
+                                                      options['num_epochs'],
+                                                      options['batch_size'],
+                                                      options['wd'])
         if append2suffix is not None:
             suffix += '_' + append2suffix
 
@@ -84,6 +85,12 @@ class Metrics(object):
         self.graddiff_on_train_data[round_i] = stats['graddiff']
         self.train_writer.add_scalar('gradnorm', stats['gradnorm'], round_i)
         self.train_writer.add_scalar('graddiff', stats['graddiff'], round_i)
+
+    def update_train_stats_only_acc_loss(self, round_i, train_stats):
+        self.loss_on_train_data[round_i] = train_stats['loss']
+        self.acc_on_train_data[round_i] = train_stats['acc']
+        self.train_writer.add_scalar('train_loss', train_stats['loss'], round_i)
+        self.train_writer.add_scalar('train_acc', train_stats['acc'], round_i)
 
     def update_eval_stats(self, round_i, eval_stats):
         self.loss_on_eval_data[round_i] = eval_stats['loss']

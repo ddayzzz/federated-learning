@@ -32,8 +32,14 @@ class BaseFedarated(object):
                                           worker=worker,
                                           batch_size=options['batch_size'])
         self.num_epochs = options['num_epochs']
+        self.num_rounds = options['num_rounds']
+        self.clients_per_round = options['clients_per_round']
+        self.save_every_round = options['save_every']
+        self.eval_on_test_every_round = options['eval_every']
+        self.eval_on_train_every_round = options['eval_train_every']
+        self.num_clients = len(self.clients)
         self.latest_model = self.worker.get_flat_model_params().detach()
-        self.name = '_'.join(['', f'wn{options["clients_per_round"]}', f'tn{len(self.clients)}'])
+        self.name = '_'.join(['', f'wn{options["clients_per_round"]}', f'tn{self.num_clients}'])
         self.metrics = Metrics(clients=self.clients, options=options, name=self.name, append2suffix=append2metric)
         self.print_result = True
 
@@ -227,13 +233,27 @@ class BaseFedarated(object):
         end_time = time.time()
 
         if self.print_result:
-            print('>>> Test: round: {} / acc: {:.3%} / '
+            print('>>> Test on eval: round: {} / acc: {:.3%} / '
                   'loss: {:.4f} / Time: {:.2f}s'.format(
                    round_i, stats_from_eval_data['acc'],
                    stats_from_eval_data['loss'], end_time-begin_time))
             # print('=' * 102 + "\n")
 
         self.metrics.update_eval_stats(round_i, stats_from_eval_data)
+
+    def test_latest_model_on_traindata_only_acc_loss(self, round_i):
+        begin_time = time.time()
+        stats_from_eval_data = self.local_test(use_eval_data=False)
+        end_time = time.time()
+
+        if self.print_result:
+            print('>>> Test on train: round: {} / acc: {:.3%} / '
+                  'loss: {:.4f} / Time: {:.2f}s'.format(
+                   round_i, stats_from_eval_data['acc'],
+                   stats_from_eval_data['loss'], end_time-begin_time))
+            # print('=' * 102 + "\n")
+
+        self.metrics.update_train_stats_only_acc_loss(round_i, stats_from_eval_data)
 
     def local_test(self, use_eval_data=True):
         assert self.latest_model is not None
