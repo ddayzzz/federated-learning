@@ -138,6 +138,5 @@ def base_options():
     parser.add_argument('--scheme',
                         help='Scheme 1;Scheme 2;Transformed scheme 2',
                         type=str,
-                        choices=['1', '2', '2t'],
-                        default='1')
+                        default='')
     return parser

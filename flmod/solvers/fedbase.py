@@ -62,7 +62,7 @@ class BaseFedarated(object):
                 #     user_id = int(user[-5:])
                 # else:
                 #     user_id = int(user)
-                self.num_train_data += len(train_data[user])
+                self.num_train_data += len(train_data[user]['x_index'])
                 # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
                 c = BaseClient(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
                                train_dataset=DatasetSplit(entire_train_dataset, idxs=train_data[user]['x_index']),
@@ -70,7 +70,7 @@ class BaseFedarated(object):
                 all_clients.append(c)
             return all_clients
         elif entire_test_dataset is None and entire_train_dataset is None:
-            # 没有 index 的数据, train 和 test 包含了所有的数据
+            # 没有 index 的数据, train 和 test 包含了所有的数据. train_data[user] 是一个 dict, 可以是 {x, y} 也可以是 {x_index,y_index}
             if len(groups) == 0:
                 groups = [None for _ in users]
 
@@ -80,10 +80,12 @@ class BaseFedarated(object):
                 #     user_id = int(user[-5:])
                 # else:
                 #     user_id = int(user)
-                self.num_train_data += len(train_data[user])
+                tr = dataset_wrapper(train_data[user], options=self.options)
+                te = dataset_wrapper(test_data[user], options=self.options)
+                self.num_train_data += len(tr)
                 c = BaseClient(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
-                               train_dataset=dataset_wrapper(train_data[user], options=self.options),
-                               test_dataset=dataset_wrapper(test_data[user], options=self.options))
+                               train_dataset=tr,
+                               test_dataset=te)
                 all_clients.append(c)
             return all_clients
         else:
@@ -97,7 +99,7 @@ class BaseFedarated(object):
                 #     user_id = int(user[-5:])
                 # else:
                 #     user_id = int(user)
-                self.num_train_data += len(train_data[user])
+                self.num_train_data += len(train_data[user]['x_index'])
                 # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
                 c = BaseClient(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
                                train_dataset=DatasetSplit(entire_train_dataset, idxs=train_data[user]['x_index']),

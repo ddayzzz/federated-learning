@@ -15,6 +15,7 @@ class FedAvgSchemes(BaseFedarated):
         self.clients_select_prob = self.get_clients_prob()  # p_k
         self.scheme = options["scheme"]  # scheme 1,2, transformed 2
         assert self.num_clients == 100, '客户端数量是100'
+        assert self.scheme in ['1', '2', '2t'], "1 for scheme I; 2 for scheme II; 2t for transformed scheme II"
 
     def get_clients_prob(self):
         num_alldata = []
@@ -37,23 +38,30 @@ class FedAvgSchemes(BaseFedarated):
                 select_index.append(i)
                 repeated_times.append(1)
             else:
-                # 对应的顺序(即对应的客户端的index)出现的次数
+                # 对应的顺序(即对应的客户端的index)出现的次数. 是为了保障只调用一次client
                 repeated_times[-1] += 1
         return select_clients, repeated_times
 
+    @property
+    def is_scheme2_like(self):
+        return self.scheme.startswith('2')
+
     def aggregate(self, solns, **kwargs):
         averaged_solution = torch.zeros_like(self.latest_model)
-        # p_k*(N/K) * W_k
-        if self.scheme.startswith('2'):
+        if self.is_scheme2_like:
             # scheme 2; transformed scheme 2
+            # \sum_k{p_k* * W_k} * N / K, p_k = 1 / N
+            # total_num = 0
             for num_sample, local_solution in solns:
-                averaged_solution += local_solution * num_sample  # simply sum the flatten parameters
+                averaged_solution += local_solution  # 和原文不一样. 这里没有乘以样本数量
+                # total_num += num_sample
             averaged_solution /= self.num_train_data  # 这里是总共的数据量,不是运行客户端的数量
             averaged_solution *= (self.num_clients / self.clients_per_round)
         else:
             # scheme 1
+            # \sum_k{W_k} / K
             repeated_times = kwargs['repeated_times']
-            assert repeated_times == len(solns)
+            assert len(repeated_times) == len(solns)
             for i, (num_sample, local_solution) in enumerate(solns):
                 averaged_solution += local_solution * repeated_times[i]
             averaged_solution /= self.clients_per_round  # TODO 一般情况下 clients_per_round = min(self.clients_per_round, self.num_clients)
@@ -69,7 +77,7 @@ class FedAvgSchemes(BaseFedarated):
             if (round_i + 1) % self.eval_on_test_every_round == 0:
                 self.test_latest_model_on_evaldata(round_i)
 
-            if self.scheme.startswith('2'):
+            if self.is_scheme2_like:
                 selected_clients, repeated_times = self.select_clients(round=round_i, num_clients=self.clients_per_round), None
             else:
                 selected_clients, repeated_times = self.select_clients_with_prob(round_i)

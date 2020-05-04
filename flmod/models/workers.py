@@ -300,7 +300,7 @@ class LRDecayWorker(Worker):
         :param client_id:
         :return:
         """
-        # TODO 以下的代码仅仅是修改了 clip 的选项
+        # 论文中每个 epoch 使用一个batch的数据.. 这里有不一样的地方
         self.model.train()
         with tqdm.trange(num_epochs) as t:
             train_loss = train_acc = train_total = 0
