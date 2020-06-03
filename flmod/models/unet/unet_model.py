@@ -2,7 +2,7 @@
 
 import torch.nn.functional as F
 
-from .unet_parts import *
+from flmod.models.unet.unet_parts import *
 
 
 class UNet(nn.Module):
@@ -35,3 +35,10 @@ class UNet(nn.Module):
         x = self.up4(x, x1)
         logits = self.outc(x)
         return logits
+
+if __name__ == '__main__':
+    unet = UNet(1, 1)
+    import torch
+    x = torch.zeros((1, 1, 128, 128))
+    p = unet(x)
+    h = 5

@@ -7,7 +7,7 @@ cpath = os.path.dirname(__file__)
 
 SAVE = True
 DATASET_FILE = os.path.join(cpath, 'data')
-MNIST_DOWNLOAD = cpath
+MNIST_DOWNLOAD = DATASET_FILE
 IMAGE_DATA = False
 np.random.seed(6)
 
@@ -48,7 +48,7 @@ def choose_two_digit(split_data_lst):
     return lst
 
 
-def main(num_user=100, split=2):
+def main(num_user=100, split=20):
     # Get MNIST data, normalize, and divide by level
     print('>>> Get MNIST data.')
     trainset = torchvision.datasets.MNIST(MNIST_DOWNLOAD, download=True, train=True)

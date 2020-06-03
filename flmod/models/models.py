@@ -27,6 +27,7 @@ class Logistic(nn.Module):
         logit = self.layer(x)
         return logit
 
+
 class CNN(nn.Module):
     def __init__(self, num_channels: int, num_classes):
         super(CNN, self).__init__()
@@ -44,6 +45,33 @@ class CNN(nn.Module):
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
         return x
+
+
+class SimpleCNNMNIST(nn.Module):
+    def __init__(self, in_channels=1, output_dim=10):
+        super(SimpleCNNMNIST, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, 6, 5)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(6, 16, 5)
+
+        # for now, we hard coded this network
+        # i.e. we fix the number of hidden layers i.e. 2 layers
+        input_dim = 16 * 4 * 4
+        hidden_dims = [128, 84]
+        self.fc1 = nn.Linear(input_dim, hidden_dims[0])
+        self.fc2 = nn.Linear(hidden_dims[0], hidden_dims[1])
+        self.fc3 = nn.Linear(hidden_dims[1], output_dim)
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(-1, 16 * 4 * 4)
+
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+
 
 class TwoHiddenLayerFc(nn.Module):
     def __init__(self, input_shape, out_dim):
@@ -185,7 +213,10 @@ def choose_model_criterion(options):
     # TODO 一般是这个
     cri = nn.CrossEntropyLoss(reduction='mean')
     if model_name == 'cnn':
-        model = CNN(num_classes=options['num_classes'], num_channels=options['num_channels'])
+        # 输入的channel, 要求输入的数据为 [B, H, W, C]
+        # options['input_shape'] = [1, 28, 28]
+        # model = CNN(num_classes=options['num_class'], num_channels=options['input_shape'][0])
+        model = SimpleCNNMNIST()
     elif model_name == 'logistic':
         if algo == 'fedavg_schemes':
             model = Logistic(options['input_shape'], options['num_class'], weight_init=torch.nn.init.zeros_)

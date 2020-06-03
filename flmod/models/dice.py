@@ -3,8 +3,9 @@ from torch.autograd import Function
 
 
 class DiceCoeff(Function):
-    """Dice coeff for individual examples"""
-
+    """
+    Dice 系数，这个类似于损失函数的定义
+    """
     def forward(self, input, target):
         self.save_for_backward(input, target)
         eps = 1.0  # TODO 作为参数

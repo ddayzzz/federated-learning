@@ -31,7 +31,7 @@ def get_dataset(flatten_input=False, merge_train_test=False):
         apply_transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,))])
-    data_dir = os.path.dirname(__file__)
+    data_dir = os.sep.join((os.path.dirname(__file__), 'data'))
     train_dataset = datasets.MNIST(data_dir, train=True, download=True,
                                    transform=apply_transform)
 

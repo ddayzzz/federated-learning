@@ -1,14 +1,6 @@
 import pickle
-import json
-import numpy as np
 import os
-import time
-import importlib
-import torchvision.transforms as transforms
-# from tensorboardX import SummaryWriter
-from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import Dataset
-from PIL import Image
+
 
 
 __all__ = ['mkdir', 'read_data_pkl', ]
@@ -71,57 +63,4 @@ def read_data_pkl(train_data_dir, test_data_dir, sub_data=None):
 
     clients = list(sorted(train_data_index.keys()))
     return clients, groups, train_data_index, test_data_index
-
-
-class MiniDataset(Dataset):
-    def __init__(self, data, options):
-        """
-        这个类在读取的 pkl 为实际的数据的时候用于将 dict 格式的数据转换为 Tensor
-        :param data:
-        :param labels:
-        """
-        super(MiniDataset, self).__init__()
-        # TODO 默认直接处理数据
-        self.data = np.array(data['x'])
-        self.labels = np.array(data['y']).astype("int64")
-
-        if self.data.ndim == 4 and self.data.shape[3] == 3:
-            self.data = self.data.astype("uint8")
-            self.transform = transforms.Compose(
-                [transforms.RandomHorizontalFlip(),
-                 transforms.RandomCrop(32, 4),
-                 transforms.ToTensor(),
-                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-                 ]
-            )
-        elif self.data.ndim == 4 and self.data.shape[3] == 1:
-            self.transform = transforms.Compose(
-                [transforms.ToTensor(),
-                 transforms.Normalize((0.1307,), (0.3081,))
-                 ]
-            )
-        elif self.data.ndim == 3:
-            self.data = self.data.reshape(-1, 28, 28, 1).astype("uint8")
-            self.transform = transforms.Compose(
-                [transforms.ToTensor(),
-                 transforms.Normalize((0.1307,), (0.3081,))
-                 ]
-            )
-        else:
-            self.data = self.data.astype("float32")
-            self.transform = None
-
-    def __len__(self):
-        return len(self.labels)
-
-    def __getitem__(self, index):
-        data, target = self.data[index], self.labels[index]
-
-        if self.data.ndim == 4 and self.data.shape[3] == 3:
-            data = Image.fromarray(data)
-
-        if self.transform is not None:
-            data = self.transform(data)
-
-        return data, target
 

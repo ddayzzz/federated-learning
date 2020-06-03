@@ -8,14 +8,15 @@ from flmod.utils.torch_utils import get_flat_grad_from_sparse
 
 
 class Worker(object):
-    """
-    Base worker for all algorithm. Only need to rewrite `self.local_train` method.
-
-    All solution, parameter or grad are Tensor type.
-    """
 
     def __init__(self, model, criterion, optimizer, options):
-        # Basic parameters
+        """
+        基本的 Worker, 完成客户端和模型之间的交互, 适用于串行化的模型
+        :param model: 模型
+        :param criterion: 模型评估器
+        :param optimizer: 共享的优化器
+        :param options:
+        """
         self.model = model
         self.optimizer = optimizer
         self.criterion = criterion
@@ -27,7 +28,7 @@ class Worker(object):
 
     def get_model_params_dict(self):
         """
-        get parameter values
+        获得网络模型的参数
         :return:
         """
         state_dict = self.model.state_dict()
@@ -35,13 +36,18 @@ class Worker(object):
 
     def get_model_params_list(self):
         """
-        get parameter values
+        列表形式的参数,按照顺序
         :return:
         """
         p = self.model.parameters()
         return list(p)
 
     def set_model_params(self, model_params_dict: dict):
+        """
+        将参数赋值给当前的模型(模拟: 将参数发送给客户端的过程)
+        :param model_params_dict: 参数字典
+        :return:
+        """
         state_dict = self.model.state_dict()
         for key, value in state_dict.items():
             state_dict[key] = model_params_dict[key]
@@ -106,16 +112,13 @@ class Worker(object):
 
 
     def local_train(self, num_epochs, train_dataloader, round_i, client_id):
-        """Train model locally and return new parameter and computation cost
-
-        Args:
-            train_dataloader: DataLoader class in Pytorch
-
-        Returns
-            1. local_solution: updated new parameter
-            2. stat: Dict, contain stats
-                2.1 comp: total FLOPS, computed by (# epoch) * (# data) * (# one-shot FLOPS)
-                2.2 loss
+        """
+        训练模型
+        :param num_epochs: epoch 数量
+        :param train_dataloader: 训练集的加载器
+        :param round_i: 第几个 round? (用于显示)
+        :param client_id: 客户端 id (用于显示)
+        :return:更新后的参数(Tensor), stat(Dict: comp->total FLOPS, computed by (# epoch) * (# data) * (# one-shot FLOPS); loss->损失函数, acc->准确率)
         """
         self.model.train()
         with tqdm.trange(num_epochs) as t:
@@ -165,8 +168,13 @@ class Worker(object):
             return local_solution, return_dict
 
     def local_test(self, test_dataloader):
+        """
+        在测试集合上运行数据
+        :param test_dataloader:
+        :return: 准确判断的个数, 总体的损失函数值
+        """
         self.model.eval()
-        test_loss = test_acc = test_total = 0.
+        test_all_loss = test_all_acc = test_total = 0.
         with torch.no_grad():
             for x, y in test_dataloader:
                 # print("test")
@@ -179,11 +187,11 @@ class Worker(object):
                 _, predicted = torch.max(pred, 1)
                 correct = predicted.eq(y).sum()
                 size = y.size(0)
-                test_acc += correct.item()
-                test_loss += loss.item() * size  # 需要乘以数据的维度, 最后除以总数量得到平均的损失
+                test_all_acc += correct.item()
+                test_all_loss += loss.item() * size  # 需要乘以数据的维度, 最后除以总数量得到平均的损失
                 test_total += size
 
-        return test_acc, test_loss
+        return test_all_acc, test_total, test_all_loss
 
     def save(self, path):
         torch.save(self.get_model_params_dict(), path)
@@ -195,17 +203,6 @@ class SegmentationWorker(Worker):
         super(SegmentationWorker, self).__init__(model, criterion, optimizer, options)
 
     def local_train(self, num_epochs, train_dataloader, round_i, client_id):
-        """Train model locally and return new parameter and computation cost
-
-        Args:
-            train_dataloader: DataLoader class in Pytorch
-
-        Returns
-            1. local_solution: updated new parameter
-            2. stat: Dict, contain stats
-                2.1 comp: total FLOPS, computed by (# epoch) * (# data) * (# one-shot FLOPS)
-                2.2 loss
-        """
         self.model.train()
         with tqdm.trange(num_epochs) as t:
             train_loss = dcs = train_total = 0
@@ -219,9 +216,9 @@ class SegmentationWorker(Worker):
                     self.optimizer.zero_grad()
                     pred = self.model(x)
 
-                    if torch.isnan(pred.max()):
-                        from IPython import embed
-                        embed()
+                    # if torch.isnan(pred.max()):
+                    #     from IPython import embed
+                    #     embed()
 
                     loss = self.criterion(pred, y)
                     loss.backward()
@@ -272,7 +269,7 @@ class SegmentationWorker(Worker):
                 test_loss += loss.item() * size  # 需要乘以数据的维度, 最后除以总数量得到平均的损失
                 test_total += size
 
-        return dc, test_loss
+        return dc, test_total, test_loss
 
 
 class StackedLSTMWorker(Worker):
@@ -357,7 +354,7 @@ def choose_worker(options):
         return SegmentationWorker
     elif model == 'stacked_lstm':
         return StackedLSTMWorker
-    elif model == 'logistic':
+    elif model in ['logistic', 'cnn']:
         workers = {'fedavg_schemes': LRDecayWorker}
         return workers.get(algo, Worker)
     else:

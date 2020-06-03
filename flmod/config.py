@@ -13,7 +13,7 @@ class ModelConfig(object):
     def config(dataset, model):
         dataset = dataset.split('_')[0]
         if dataset == 'mnist':
-            if model == 'logistic' or model == '2nn':
+            if model == 'logistic' or model == '2nn':  # 线性模型或者两层的MLP
                 return {'input_shape': 784, 'num_class': 10}
             else:
                 return {'input_shape': (1, 28, 28), 'num_class': 10}
@@ -40,15 +40,18 @@ class ModelConfig(object):
     @staticmethod
     def get_entire_dataset(dataset, options):
         if dataset == 'mnist':
-            from flmod.dataset.mnist.get_datset import get_dataset
-            if options['dataset'] == 'mnist_user1000_niid_0_keep_10_train_9':
-                # 这个数据不使用 index
-                return None, None
-            if options['model'] == 'logistic':
-                # 需要扁平化
-                return get_dataset(flatten_input=True)
-            else:
-                return get_dataset(flatten_input=False)
+            # 目前使用直接序列化后的数据
+            return None, None
+            # from flmod.dataset.mnist.get_datset import get_dataset
+            # if options['dataset'] in ['mnist_user1000_niid_0_keep_10_train_9', 'mnist_all_data_0_random_niid_org', 'mnist_user1000_niid_0_keep_10_train_9_no_flatten']:
+            #     # 这个数据不使用 index
+            #     return None, None
+            # 下面的几种情况则是利用的 index 作为保存的数据格式
+            # if options['model'] == 'logistic':
+            #     # 需要扁平化
+            #     return get_dataset(flatten_input=True)
+            # else:
+            #     return get_dataset(flatten_input=False)
         elif dataset in ['synthetic', 'shakespeare', 'brats2018']:
             return None, None
         else:
@@ -56,7 +59,8 @@ class ModelConfig(object):
 
     @staticmethod
     def dataset_config(dataset, options):
-        cfg = {'data_wrapper': None, 'worker': None}
+        from flmod.utils.data_utils import MiniDataset  # 标准的数据封装
+        cfg = {'dataset_wrapper': MiniDataset, 'worker': None}
         if dataset == 'shakespeare':
             from flmod.dataset.shakespeare.shakespeare import Shakespeare
             cfg['dataset_wrapper'] = Shakespeare

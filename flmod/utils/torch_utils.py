@@ -3,15 +3,21 @@ import numpy as np
 
 
 def zeros(shape, gpu=True, **kwargs):
-    # return torch.zeros(*shape, **kwargs).cuda() if use_gpu and gpu else torch.zeros(*shape)
-    # TODO 创建 CUDA 的张量
+    """
+    得到全零的张量 TODO: 默认创建在GPU上的张量
+    :param shape: 形状
+    :param gpu: 是否使用gpu
+    :param kwargs:
+    :return:
+    """
     return torch.zeros(*shape, **kwargs).cuda() if gpu else torch.zeros(*shape, **kwargs)
+
 
 def get_flat_params_from(model):
     """
-    flat model parameters(parameters() 和 state_dict 不同, 前者返回一个生成器)
-    :param model:
-    :return:
+    得到扁平的模型的参数
+    :param model: 模型类
+    :return: 扁平化的参数，顺序为 model.parameters() 的顺序
     """
     params = []
     for param in model.parameters():
@@ -22,10 +28,21 @@ def get_flat_params_from(model):
 
 
 def model_parameters_shape_list(model):
+    """
+    模型参数的形状
+    :param model: 模型
+    :return: 大小
+    """
     return [x.size() for x in model.parameters()]
 
 
 def from_flatten_to_parameter(shape_info, flat_params):
+    """
+    flat的参数->原始的形状
+    :param shape_info: 维度信息(可由model_parameters_shape_list得出)
+    :param flat_params: 扁平的参数
+    :return:
+    """
     new_params = []
     prev_ind = 0
     for shape in shape_info:
@@ -39,7 +56,7 @@ def from_flatten_to_parameter(shape_info, flat_params):
 
 def set_flat_params_to(model, flat_params):
     """
-    set model parameters from flatten parameters
+    扁平化的参数转换为
     :param model:
     :param flat_params:
     :return:

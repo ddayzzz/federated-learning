@@ -70,6 +70,18 @@ class FedProx(BaseFedarated):
         averaged_solution /= self.clients_per_round  # TODO 一般情况下 clients_per_round = min(self.clients_per_round, self.num_clients)
         return averaged_solution.detach()
 
+    def select_clients(self, round, num_clients=20):
+        """
+        这里只输出客户端的编号和被选择的客户端
+        :param round:
+        :param num_clients:
+        :return:
+        """
+        num_clients = min(num_clients, self.num_clients)  # 选择的客户端
+        np.random.seed(round)  # make sure for each comparison, we are selecting the same clients each round
+        selected_clients_indx = np.random.choice(self.num_clients, num_clients, replace=False)
+        return selected_clients_indx
+
     def local_train(self, selected_clients, round_i):
         raise NotImplementedError
 
@@ -97,9 +109,19 @@ class FedProx(BaseFedarated):
             if self.prob_select_simple_average():
                 target_clients, multiple_times, client_indices = self.select_clients_with_prob(round_i, self.clients_per_round)
                 # 那些客户端的编号可以完成所有的操作
-                activated_clients_indx = np.random.choice(client_indices,
-                                                          round(self.clients_per_round * (1 - self.drop_rate)),
-                                                          replace=False)
+                # 由于有重复的客户端以及不放回的抽样, 这里可能并没有足够的数据. 如果 dp > 0, 则将所有的客户端展开而不是利用
+                if self.drop_rate > 0:
+                    # TODO 这段代码还有问题, 一个思路是把所有客户端展开, 然后采样;如果判断只有一次执行的客户端就仅仅运行一次, 否则运行多次
+                    expand_clients = []
+                    for i, ci in enumerate(client_indices):
+                        expand_clients.extend([ci] * multiple_times[i])
+                    # 肯定是有重复的
+                    activated_clients_indx = np.random.choice(expand_clients,
+                                                              round(self.clients_per_round * (1 - self.drop_rate)),
+                                                              replace=False)
+
+                else:
+                    activated_clients_indx = client_indices
                 # 能够顺利完成任务客户端, 其余的不在 active 但是被选择的客户端被视为 starggle
                 self.update_optimizer_weights()
                 solns = []

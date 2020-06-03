@@ -14,8 +14,6 @@ class FedAvg(BaseFedarated):
     def train(self):
         for round_i in range(self.num_rounds):
             print(f'>>> Global Training Round : {round_i + 1}')
-            if (round_i + 1) % self.eval_on_train_every_round == 0:
-                self.calc_client_grads(round_i)
             # eval on test
             if (round_i + 1) % self.eval_on_test_every_round == 0:
                 self.test_latest_model_on_evaldata(round_i)

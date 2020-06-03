@@ -14,9 +14,13 @@ class BaseFedarated(object):
     def __init__(self, options, model, dataset, optimizer, criterion, worker=None, append2metric=None):
         """
         定义联邦学习的基本的服务器, 这里的模型是在所有的客户端之间共享使用
-        :param learner:
-        :param dataset:
-        :param model:
+        :param options: 参数配置
+        :param model: 模型
+        :param dataset: 数据集参数
+        :param optimizer: 优化器
+        :param criterion: 损失函数类型(交叉熵,Dice系数等等)
+        :param worker: Worker 实例
+        :param append2metric: 自定义metric
         """
         # if worker is None:
         #     from flmod.models.workers import Worker
@@ -48,9 +52,9 @@ class BaseFedarated(object):
         users, groups, train_data, test_data, entire_train_dataset, entire_test_dataset, dataset_cfg = dataset
         # 配置相关的参数
         dataset_wrapper = dataset_cfg.get('dataset_wrapper')
-        if dataset_wrapper is None:
-            from flmod.utils.worker_utils import MiniDataset
-            dataset_wrapper = MiniDataset
+        # if dataset_wrapper is None:
+        #     from flmod.utils.worker_utils import MiniDataset
+        #     dataset_wrapper = MiniDataset
 
         if entire_test_dataset is None and entire_train_dataset is not None:
             # train  和 test 的数据是合并的
@@ -108,16 +112,14 @@ class BaseFedarated(object):
             return all_clients
 
     def local_train(self, selected_clients, round_i):
-        solns = []  # Buffer for receiving client solutions
-        stats = []  # Buffer for receiving client communication costs
+        solns = []  # 从客户端中接收的参数
+        stats = []  # 通信代价 stats 信息
         for i, c in enumerate(selected_clients, start=1):
-            # Communicate the latest model
+            # 把最新的模型广播出去
             c.set_flat_model_params(self.latest_model)
 
-            # Solve minimization locally
+            # 运行训练
             soln, stat = c.local_train(round_i, self.num_epochs)
-
-            # Add solutions and stats
             solns.append(soln)
             stats.append(stat)
 
@@ -128,37 +130,29 @@ class BaseFedarated(object):
         pass
 
     def select_clients(self, round, num_clients=20):
-        '''selects num_clients clients weighted by number of samples from possible_clients
-
-        Args:
-            num_clients: number of clients to select; default 20
-                note that within function, num_clients is set to
-                min(num_clients, len(possible_clients))
-
-        Return:
-            list of selected clients objects
-        '''
-
+        """
+        选择客户端, 采用的均匀的无放回采样
+        :param round:
+        :param num_clients:
+        :return:
+        """
         num_clients = min(num_clients, len(self.clients))
-        np.random.seed(round)  # make sure for each comparison, we are selecting the same clients each round
+        np.random.seed(round)  # 确定每一轮次选择相同的客户端(用于比较不同算法在同一数据集下的每一轮的客户端不变)
         return np.random.choice(self.clients, num_clients, replace=False).tolist()
 
     def aggregate(self, solns, **kwargs):
-        """Aggregate local solutions and output new global parameter
-
-        Args:
-            solns: a generator or (list) with element (num_sample, local_solution)
-
-        Returns:
-            flat global model parameter
         """
-        # flatten
+        聚合模型
+        :param solns: 列表. [(样本数量, 扁平化的参数)]
+        :param kwargs:
+        :return: 聚合后的参数
+        """
         averaged_solution = torch.zeros_like(self.latest_model)
         num_all_samples = 0
         for num_sample, local_solution in solns:
             num_all_samples += num_sample
-            averaged_solution += local_solution * num_sample # simply sum the flatten parameters
-        averaged_solution /= num_all_samples  # divide the num of clients
+            averaged_solution += local_solution * num_sample # 加和, 乘以对应客户端的样本数量
+        averaged_solution /= num_all_samples  # 除以运行样本的整体数量
         return averaged_solution.detach()
 
     def test_latest_model_on_traindata(self, round_i):
@@ -170,7 +164,8 @@ class BaseFedarated(object):
         begin_time = time.time()
         stats_from_train_data = self.local_test(use_eval_data=False)
 
-        # Record the global gradient
+        # 记录梯度用
+        # flatten后的模型长度
         model_len = len(self.latest_model)
         global_grads = np.zeros(model_len)
         num_samples = []
@@ -184,7 +179,7 @@ class BaseFedarated(object):
         global_grads /= np.sum(np.asarray(num_samples))
         stats_from_train_data['gradnorm'] = np.linalg.norm(global_grads)
 
-        # Measure the gradient difference
+        # 计算公式为 (客户端模型 - 上一次聚合后的模型) ^ 2, 一定程度上, 上一次聚合后的模型为平均的模型, 解释为方差
         difference = 0.
         for idx in range(len(self.clients)):
             difference += np.sum(np.square(global_grads - local_grads[idx]))
@@ -201,7 +196,11 @@ class BaseFedarated(object):
         return global_grads
 
     def calc_client_grads(self, round_i):
-        # Collect stats from total train data
+        """
+        仅仅计算客户端梯度信息, 不在完整的训练集上运行测试
+        :param round_i:
+        :return:
+        """
         model_len = len(self.latest_model)
         global_grads = np.zeros(model_len)
         num_samples = []
@@ -215,7 +214,7 @@ class BaseFedarated(object):
         global_grads /= np.sum(np.asarray(num_samples))
         gradnorm = np.linalg.norm(global_grads)
 
-        # Measure the gradient difference
+
         difference = 0.
         for idx in range(len(self.clients)):
             difference += np.sum(np.square(global_grads - local_grads[idx]))
@@ -229,7 +228,6 @@ class BaseFedarated(object):
         self.metrics.update_grads_stats(round_i, stats)
 
     def test_latest_model_on_evaldata(self, round_i):
-        # Collect stats from total eval data
         begin_time = time.time()
         stats_from_eval_data = self.local_test(use_eval_data=True)
         end_time = time.time()

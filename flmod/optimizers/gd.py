@@ -4,6 +4,12 @@ from torch.optim.optimizer import required
 
 class GradientDescend(Optimizer):
     def __init__(self, params, lr=required, weight_decay=0):
+        """
+        定义梯度下降的优化器, 基本代码和 torch 自带的 SGD 相同.
+        :param params: 网络的参数
+        :param lr: 初始学习率
+        :param weight_decay:
+        """
         self.lr = lr
         if lr is not required and lr < 0.0:
             raise ValueError("Invalid learning rate: {}".format(lr))

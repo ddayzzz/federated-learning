@@ -1,31 +1,30 @@
-"""Utils for language models."""
 import numpy as np
 from torch.utils.data import Dataset
 import re
 
 # ------------------------
-# utils for shakespeare dataset
+# 符号表
 
 ALL_LETTERS = "\n !\"&'(),-.0123456789:;>?ABCDEFGHIJKLMNOPQRSTUVWXYZ[]abcdefghijklmnopqrstuvwxyz}"
 NUM_LETTERS = len(ALL_LETTERS)
 
 
 def letter_to_index(letter):
-    '''returns one-hot representation of given letter
-    '''
+    """
+    字符的索引
+    :param letter:
+    :return:
+    """
     index = ALL_LETTERS.find(letter)
     return index
 
 
 def word_to_indices(word):
-    '''returns a list of character indices
-
-    Args:
-        word: string
-
-    Return:
-        indices: int list with length len(word)
-    '''
+    """
+    将单词转换为
+    :param word:
+    :return:
+    """
     indices = []
     for c in word:
         indices.append(ALL_LETTERS.find(c))
@@ -33,7 +32,7 @@ def word_to_indices(word):
 
 
 # ------------------------
-# utils for sent140 dataset
+# 可用于Sent40, Shakespeare
 
 
 def split_line(line):

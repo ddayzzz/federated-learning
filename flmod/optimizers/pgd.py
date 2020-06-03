@@ -6,6 +6,13 @@ import torch
 class PerturbedGradientDescent(Optimizer):
 
     def __init__(self, params, lr=required, mu=0.0, weight_decay=0):
+        """
+        扰动梯度下降
+        :param params:
+        :param lr:
+        :param mu: Proximal term 的系数
+        :param weight_decay:
+        """
         if lr is not required and lr < 0.0:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if weight_decay < 0.0:
@@ -58,6 +65,10 @@ class PerturbedGradientDescent(Optimizer):
                 p.data.add_(-group['lr'], d_p)
 
         return loss
+
+    def set_old_weights(self, old_weights):
+        for param_group in self.param_groups:
+            param_group['w_old'] = old_weights
 
     def set_mu(self, mu):
         for param_group in self.param_groups:

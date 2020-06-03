@@ -8,19 +8,26 @@ import torch
 class FedAvgSchemes(BaseFedarated):
 
     def __init__(self, options, all_data_info):
+        """
+        ICLR2020 - ON THE CONVERGENCE OF FEDAVG ON NON-IID DATA 所提出的 Schemes
+        :param options:
+        :param all_data_info:
+        """
         model, crit = choose_model_criterion(options=options)
         self.optimizer = GradientDescend(model.parameters(), lr=options['lr'], weight_decay=options['wd'])
         suffix = f'mu{options["mu"]}_dp{options["drop_rate"]}_scheme{options["scheme"]}'
         super(FedAvgSchemes, self).__init__(options=options, model=model, dataset=all_data_info, optimizer=self.optimizer, criterion=crit, append2metric=suffix)
         self.clients_select_prob = self.get_clients_prob()  # p_k
         self.scheme = options["scheme"]  # scheme 1,2, transformed 2
-        assert self.num_clients == 100, '客户端数量是100'
+        # assert self.num_clients == 100, '客户端数量是100'
         assert self.scheme in ['1', '2', '2t'], "1 for scheme I; 2 for scheme II; 2t for transformed scheme II"
+        self.prob_average = self.scheme.startswith('2')
 
     def get_clients_prob(self):
         num_alldata = []
         for client in self.clients:
             num_alldata.append(client.num_train_data)
+        assert sum(num_alldata) == self.num_train_data
         return np.array(num_alldata) / sum(num_alldata)
 
     def select_clients_with_prob(self, round):
@@ -42,18 +49,15 @@ class FedAvgSchemes(BaseFedarated):
                 repeated_times[-1] += 1
         return select_clients, repeated_times
 
-    @property
-    def is_scheme2_like(self):
-        return self.scheme.startswith('2')
 
     def aggregate(self, solns, **kwargs):
         averaged_solution = torch.zeros_like(self.latest_model)
-        if self.is_scheme2_like:
+        if self.prob_average:
             # scheme 2; transformed scheme 2
             # \sum_k{p_k* * W_k} * N / K, p_k = 1 / N
             # total_num = 0
             for num_sample, local_solution in solns:
-                averaged_solution += local_solution  # 和原文不一样. 这里没有乘以样本数量
+                averaged_solution += local_solution * num_sample
                 # total_num += num_sample
             averaged_solution /= self.num_train_data  # 这里是总共的数据量,不是运行客户端的数量
             averaged_solution *= (self.num_clients / self.clients_per_round)
@@ -77,9 +81,11 @@ class FedAvgSchemes(BaseFedarated):
             if (round_i + 1) % self.eval_on_test_every_round == 0:
                 self.test_latest_model_on_evaldata(round_i)
 
-            if self.is_scheme2_like:
+            if self.prob_average:
+                # 使用 uniform 的采样
                 selected_clients, repeated_times = self.select_clients(round=round_i, num_clients=self.clients_per_round), None
             else:
+                # 按照概率采样
                 selected_clients, repeated_times = self.select_clients_with_prob(round_i)
             solutions, stats = self.local_train(selected_clients, round_i=round_i)
 
