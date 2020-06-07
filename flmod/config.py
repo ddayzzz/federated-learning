@@ -138,6 +138,10 @@ def base_options():
                         help='seed for randomness;',
                         type=int,
                         default=0)
+    parser.add_argument('--quiet',
+                        help='hide output; only show eval results',
+                        type=int,
+                        default=0)
     # FedAvg Scheme
     parser.add_argument('--scheme',
                         help='Scheme 1;Scheme 2;Transformed scheme 2',

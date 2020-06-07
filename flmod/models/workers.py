@@ -25,6 +25,7 @@ class Worker(object):
         self.flops, self.params_num, self.model_bytes = \
             get_model_complexity_info(self.model, options['input_shape'], device=self.device, input_type=options.get('input_type'))
         self.model_shape_info = model_parameters_shape_list(model)
+        self.hide_output = True if options['quiet'] == 0 else False
 
     def get_model_params_dict(self):
         """
@@ -121,7 +122,7 @@ class Worker(object):
         :return:更新后的参数(Tensor), stat(Dict: comp->total FLOPS, computed by (# epoch) * (# data) * (# one-shot FLOPS); loss->损失函数, acc->准确率)
         """
         self.model.train()
-        with tqdm.trange(num_epochs) as t:
+        with tqdm.trange(num_epochs, disable=self.hide_output) as t:
             train_loss = train_acc = train_total = 0
             for epoch in t:
                 t.set_description(f'Client: {client_id}, Round: {round_i + 1}, Epoch :{epoch + 1}')
@@ -204,7 +205,7 @@ class SegmentationWorker(Worker):
 
     def local_train(self, num_epochs, train_dataloader, round_i, client_id):
         self.model.train()
-        with tqdm.trange(num_epochs) as t:
+        with tqdm.trange(num_epochs, disable=self.hide_output) as t:
             train_loss = dcs = train_total = 0
             for epoch in t:
                 t.set_description(f'Client: {client_id}, Round: {round_i + 1}, Epoch :{epoch + 1}')
@@ -286,6 +287,13 @@ class StackedLSTMWorker(Worker):
 class LRDecayWorker(Worker):
 
     def __init__(self, model, criterion, optimizer, options):
+        """
+        这里实现的是 ICLR,2020 Li Xiang等人提出的改版的 FedAvg. 与原始的 McMahan 等人提出的 FedAvg 不同,
+        :param model:
+        :param criterion:
+        :param optimizer:
+        :param options:
+        """
         super(LRDecayWorker, self).__init__(model, criterion, optimizer, options)
 
     def local_train(self, num_epochs, train_dataloader, round_i, client_id):
@@ -299,10 +307,11 @@ class LRDecayWorker(Worker):
         """
         # 论文中每个 epoch 使用一个batch的数据.. 这里有不一样的地方
         self.model.train()
-        with tqdm.trange(num_epochs) as t:
+        with tqdm.trange(num_epochs, disable=self.hide_output) as t:
             train_loss = train_acc = train_total = 0
             for epoch in t:
                 t.set_description(f'Client: {client_id}, Round: {round_i + 1}, Epoch :{epoch + 1}')
+                # 这里有个不同的地方, 就是 one-shot 训练
                 for batch_idx, (x, y) in enumerate(train_dataloader):
                     # from IPython import embed
                     # embed()
