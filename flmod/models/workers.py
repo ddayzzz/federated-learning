@@ -311,36 +311,29 @@ class LRDecayWorker(Worker):
             train_loss = train_acc = train_total = 0
             for epoch in t:
                 t.set_description(f'Client: {client_id}, Round: {round_i + 1}, Epoch :{epoch + 1}')
-                # 这里有个不同的地方, 就是 one-shot 训练
-                for batch_idx, (x, y) in enumerate(train_dataloader):
-                    # from IPython import embed
-                    # embed()
-                    x, y = x.to(self.device), y.to(self.device)
+                X, y = next(iter(train_dataloader))
+                # 提取出一个 batch, 以一个 batch 的数据作为一次 epoch 的更新
+                X, y = X.to(self.device), y.to(self.device)
 
-                    self.optimizer.zero_grad()
-                    pred = self.model(x)
+                self.optimizer.zero_grad()
+                pred = self.model(X)
 
-                    if torch.isnan(pred.max()):
-                        from IPython import embed
-                        embed()
+                loss = self.criterion(pred, y)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm(self.model.parameters(), 60)
+                self.optimizer.step()
 
-                    loss = self.criterion(pred, y)
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm(self.model.parameters(), 60)
-                    self.optimizer.step()
+                _, predicted = torch.max(pred, 1)
+                correct = predicted.eq(y).sum().item()
 
-                    _, predicted = torch.max(pred, 1)
-                    correct = predicted.eq(y).sum().item()
-
-                    target_size = y.size(0)
-                    # TODO 一般的损失函数会进行平均(mean), 但是这里不需要, 一种做法是指定损失函数仅仅用 sum, 但是考虑到pytorch中的损失函数默认为mean,故这里进行了些修改
-                    single_batch_loss = loss.item() * target_size
-                    train_loss += single_batch_loss
-                    train_acc += correct
-                    train_total += target_size
-                    if self.verbose and (batch_idx % 10 == 0):
-                        # 纯数值, 这里使用平均的损失
-                        t.set_postfix(mean_loss=loss.item())
+                target_size = y.size(0)
+                single_batch_loss = loss.item() * target_size
+                train_loss += single_batch_loss
+                train_acc += correct
+                train_total += target_size
+                if self.verbose and (epoch % 10 == 0):
+                    # 纯数值, 这里使用平均的损失
+                    t.set_postfix(mean_loss=loss.item())
 
             local_solution = self.get_flat_model_params()
             # 计算模型的参数值
