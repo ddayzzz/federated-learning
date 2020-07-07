@@ -7,10 +7,11 @@ import random
 from flmod.utils.worker_utils import read_data_pkl
 from flmod.config import DATASETS, TRAINERS
 from flmod.config import model_settings
-from flmod.config import base_options
+from flmod.config import base_options, add_dynamic_options
 
 def read_options():
     parser = base_options()
+    parser = add_dynamic_options(parser)
     parsed = parser.parse_args()
     options = parsed.__dict__
     # 设置种子
@@ -50,11 +51,15 @@ def read_options():
 
 
 def main():
+    prefix = os.path.dirname(__file__)
+    if prefix == '':
+        prefix = '.'
+
     # 解析参数
     options, trainer_class, dataset_name, sub_data = read_options()
 
-    train_path = os.path.join('./dataset', dataset_name, 'data', 'train')
-    test_path = os.path.join('./dataset', dataset_name, 'data', 'test')
+    train_path = os.path.join(prefix, 'dataset', dataset_name, 'data', 'train')
+    test_path = os.path.join(prefix, 'dataset', dataset_name, 'data', 'train')
 
     all_data_info, (train_dataset, test_datatset) = read_data_pkl(train_path, test_path, sub_data=sub_data), \
                                                     model_settings.get_entire_dataset(dataset_name, options=options)

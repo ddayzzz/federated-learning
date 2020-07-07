@@ -1,7 +1,7 @@
 # GLOBAL PARAMETERS
 import argparse
 DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018']
-TRAINERS = {'fedavg': 'FedAvg', 'fedprox': 'FedProx', 'fedprox_non_grad': 'FedProxNonGrad', 'fedavg_schemes': 'FedAvgSchemes'}
+TRAINERS = {'fedavg': 'FedAvg', 'fedprox': 'FedProx', 'fedprox_non_grad': 'FedProxNonGrad', 'fedavg_schemes': 'FedAvgSchemes', 'q_maml': 'MAML'}
 OPTIMIZERS = TRAINERS.keys()
 
 
@@ -62,10 +62,10 @@ class ModelConfig(object):
         from flmod.utils.data_utils import MiniDataset  # 标准的数据封装
         cfg = {'dataset_wrapper': MiniDataset, 'worker': None}
         if dataset == 'shakespeare':
-            from flmod.dataset.shakespeare.shakespeare import Shakespeare
+            from dataset.shakespeare.shakespeare import Shakespeare
             cfg['dataset_wrapper'] = Shakespeare
         elif dataset == 'brats2018':
-            from flmod.dataset.brats2018.brats2018_dataset import BRATS2018Dataset
+            from dataset.brats2018.brats2018_dataset import BRATS2018Dataset
             cfg['dataset_wrapper'] = BRATS2018Dataset
         return cfg
 
@@ -148,3 +148,12 @@ def base_options():
                         type=str,
                         default='')
     return parser
+
+
+def add_dynamic_options(argparser):
+    # 获取对应的 solver 的名称
+    params = argparser.parse_known_args()[0]
+    algo = params.algo
+    if algo in ['q_maml', 'q_fedavg', 'q_fedsgd']:
+        argparser.add_argument('--q_coef', help='q', type=float, default=0.0)
+    return argparser
