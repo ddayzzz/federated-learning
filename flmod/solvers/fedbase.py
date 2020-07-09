@@ -45,7 +45,7 @@ class BaseFedarated(object):
         self.latest_model = self.worker.get_flat_model_params().detach()
         self.name = '_'.join(['', f'wn{options["clients_per_round"]}', f'tn{self.num_clients}'])
         self.metrics = Metrics(clients=self.clients, options=options, name=self.name, append2suffix=append2metric)
-        self.print_result = False if options['quiet'] == 0 else True
+        self.print_result = True if options['quiet'] == 0 else False
 
     def setup_clients(self, dataset, criterion, worker, batch_size):
         users, groups, train_data, test_data, entire_train_dataset, entire_test_dataset, dataset_cfg = dataset
