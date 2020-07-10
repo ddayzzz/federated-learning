@@ -1,7 +1,7 @@
 # tensorflow 版本的配置文件
 import argparse
-DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018', 'nist', 'sent140']
-TRAINERS_TONAMES = {'fedavg': 'Server', 'fedprox': 'Server', 'feddane': 'Server'}
+DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018', 'nist', 'sent140', 'omniglot']
+TRAINERS_TONAMES = {'fedavg': 'Server', 'fedprox': 'Server', 'feddane': 'Server', 'maml': 'Server'}
 TRAINERS = TRAINERS_TONAMES.keys()
 # 模型的参数, 这里的模型都不可复用故而直接写死
 MODEL_PARAMS = {
@@ -12,7 +12,8 @@ MODEL_PARAMS = {
     'mnist.mclr': (10,), # num_classes
     'mnist.cnn': (10,),  # num_classes
     'shakespeare.stacked_lstm': (80, 80, 256), # seq_len, emb_dim, num_hidden
-    'synthetic.mclr': (10, )  # num_classes
+    'synthetic.mclr': (10, ),  # num_classes
+    'omniglot.cnn': (5, ),  # num_classes
 }
 
 def base_options():
@@ -91,8 +92,8 @@ def add_dynamic_options(argparser):
     # 获取对应的 solver 的名称
     params = argparser.parse_known_args()[0]
     algo = params.algo
-    if algo in ['q_maml', 'q_fedavg', 'q_fedsgd']:
-        argparser.add_argument('--q_coef', help='q', type=float, default=0.0)
+    if algo in ['maml']:
+        argparser.add_argument('--num_fine_tune', help='number of fine-tune', type=int, default=0)
     elif algo in ['fedprox']:
         argparser.add_argument('--mu',
                             help='mu',

@@ -84,5 +84,16 @@ def cosine_sim(a, b):
     return dot_product * 1.0 / (norm_a * norm_b)  
 
 
+def norm_grad(grad_list):
+    """
+    获得梯度的范数(L2范数)
+    :param grad_list:
+    :return:
+    """
 
+    client_grads = grad_list[0] # shape now: (784, 26)
 
+    for i in range(1, len(grad_list)):
+        client_grads = np.append(client_grads, grad_list[i])  # output a flattened array
+
+    return np.sum(np.square(client_grads))

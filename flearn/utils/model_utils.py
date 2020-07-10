@@ -4,6 +4,7 @@ import os
 import time
 from torch.utils.tensorboard import SummaryWriter
 
+
 def mkdir(path):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
@@ -32,6 +33,7 @@ def batch_data(data, batch_size, shuffle=True):
         batched_y = data_y[i:i+batch_size]
         yield (batched_x, batched_y)
 
+
 def batch_data_multiple_iters(data, batch_size, num_iters):
     data_x = data['x']
     data_y = data['y']
@@ -54,6 +56,38 @@ def batch_data_multiple_iters(data, batch_size, num_iters):
         batched_x = data_x[idx: idx+batch_size]
         batched_y = data_y[idx: idx+batch_size]
         idx += batch_size
+        yield (batched_x, batched_y)
+
+
+def gen_batch(data, batch_size, num_iter):
+    """
+    生成迭代器(循环产生数据)
+    :param data:
+    :param batch_size:
+    :param num_iter:
+    :return:
+    """
+    data_x = data['x']
+    data_y = data['y']
+    index = len(data_y)
+    data_sz = len(data_y)
+
+    for i in range(num_iter):
+        index += batch_size
+        if index + batch_size > data_sz:
+            # 意味着要重新进行循环了吧?
+            # TODO 如果不整除, 可能会忽略一些数据
+            index = 0
+            np.random.seed(i + 1)
+            # randomly shuffle the data after one pass of the entire training set
+            rng_state = np.random.get_state()
+            np.random.shuffle(data_x)
+            np.random.set_state(rng_state)
+            np.random.shuffle(data_y)
+
+        batched_x = data_x[index: index + batch_size]
+        batched_y = data_y[index: index + batch_size]
+
         yield (batched_x, batched_y)
 
 def read_data(train_data_dir, test_data_dir):

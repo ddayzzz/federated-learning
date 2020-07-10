@@ -169,7 +169,8 @@ class OmniglotNShot:
 
     def normalization(self):
         """
-        Normalizes our data, to have a mean of 0 and sdt of 1
+        对于数据进行归一化
+        :return:
         """
         self.mean = np.mean(self.x_train)
         self.std = np.std(self.x_train)
@@ -184,7 +185,7 @@ class OmniglotNShot:
         self.max = np.max(self.x_train)
         self.min = np.min(self.x_train)
 
-    def generate_dataset_for_fair(self):
+    def generate_dataset_for_fair(self, one_hot):
         """
         生成 ICLR 2020 fair learning 格式的数据集.
         :return:
@@ -196,6 +197,12 @@ class OmniglotNShot:
         for i in range(400):  # 400 tasks
             if i < 300:  # first 300 meta-training tasks
                 # TODO 看样子是 5 ways
+                """
+                从 numpy 的例子可以间接看出, choice 在不放回的情况下是无重复的 
+                >>> np.random.choice(5, 3, replace=False)
+                array([3,1,0])
+                >>> #This is equivalent to np.random.permutation(np.arange(5))[:3]
+                """
                 class_ids = np.random.choice(1200, 5)
                 task_to_class[i] = class_ids
             else:
@@ -204,7 +211,7 @@ class OmniglotNShot:
                 task_to_class[i] = class_ids
         # 拥有对应类的 task 的编号
         class_to_task = {}
-        for i in range(1643):
+        for i in range(1623):
             class_to_task[i] = []
         for i in range(400):
             for j in task_to_class[i]:
@@ -224,15 +231,17 @@ class OmniglotNShot:
         all_data = []
         for idx in range(self.x.shape[0]):
             # idx 代表的 class id
-            # 指定对应的 shot
             for i in range(self.x.shape[1]):
+                # i 指定对应的 shot
                 content = self.x[idx, i, :, :, :]
+                # 取出的图像为 28 * 28 = 784 (不考虑最后一维作为灰度)
                 content = content.flatten()
                 all_data.append(content)
+                # x.shape[1] == 20, < 10 的部划分给 train, >= 10 的部分给 test
                 if i < 10:
                     for device_id in class_to_task[idx]:
                         X_train[device_id].append(content)
-                        # np.where 找到对应的位置
+                        # np.where 找到对应的位置. 这个位置的取值为 [0, 5) 的整数. idx 一定是存在的, np.where 返回的就是idx在其中的坐标(注意只有5个类)
                         y_train[device_id].append(int(np.where(task_to_class[device_id] == idx)[0][0].astype(np.int32)))
 
                 else:
@@ -266,24 +275,56 @@ class OmniglotNShot:
         test_data = {'users': [], 'user_data': {}, 'num_samples': []}
         for i in range(num_device):
             uname = "class_" + str(i)
+            # users 是按照顺序添加的, 因此不会造成顺序的问题
             train_data['users'].append(uname)
             train_data['user_data'][uname] = {'x': X_train[i], 'y': y_train[i]}
             test_data['users'].append(uname)
             test_data['user_data'][uname] = {'x': X_test[i], 'y': y_test[i]}
+
+
         with open(train_file, 'wb') as outfile:
             pickle.dump(train_data, outfile, pickle.HIGHEST_PROTOCOL)
         with open(test_file, 'wb') as outfile:
             pickle.dump(test_data, outfile, pickle.HIGHEST_PROTOCOL)
 
 
+def load_data():
+    train_file = os.sep.join(('.', 'data', 'train', 'fair_task[400].pkl'))
+    test_file = os.sep.join(('.', 'data', 'test', 'fair_task[400].pkl'))
+    with open(train_file, 'rb') as fp:
+        train = pickle.load(fp)
+    with open(test_file, 'rb') as fp:
+        test = pickle.load(fp)
+    return train, test
+
+def test():
+    train, test = load_data()
+    train_samples_size = []
+    test_samples_size = []
+    for i in range(400):
+        uname = 'class_' + str(i)
+        train_x = train['user_data'][uname]['x']
+        train_y = train['user_data'][uname]['y']
+        test_x = test['user_data'][uname]['x']
+        test_y = test['user_data'][uname]['y']
+        # train 和 test 确实不同, 但是生成的文件确实相同很奇怪
+        train_samples_size.append(len(train_y))
+        test_samples_size.append(len(test_y))
+    train_mean = np.mean(train_samples_size)
+    train_var = np.var(train_samples_size)
+    test_mean = np.mean(test_samples_size)
+    test_var = np.var(test_samples_size)
+    print(train_mean, train_var, test_mean, test_var)
+
 if __name__ == '__main__':
-    prefix = os.path.dirname(__file__)
-    if len(prefix) <= 0:
-        prefix = '.'
-    paths = ['{prefix}{sep}data', '{prefix}{sep}data{sep}train', '{prefix}{sep}data{sep}test']
-    for path in paths:
-        p = path.format(sep=os.sep, prefix=prefix)
-        if not os.path.exists(p):
-            os.mkdir(p)
-    omniglot_gen = OmniglotNShot(root=prefix, imgsz=28)
-    omniglot_gen.generate_dataset_for_fair()
+    # prefix = os.path.dirname(__file__)
+    # if len(prefix) <= 0:
+    #     prefix = '.'
+    # paths = ['{prefix}{sep}data', '{prefix}{sep}data{sep}train', '{prefix}{sep}data{sep}test']
+    # for path in paths:
+    #     p = path.format(sep=os.sep, prefix=prefix)
+    #     if not os.path.exists(p):
+    #         os.mkdir(p)
+    # omniglot_gen = OmniglotNShot(root=prefix, imgsz=28)
+    # omniglot_gen.generate_dataset_for_fair()
+    test()

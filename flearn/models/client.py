@@ -10,8 +10,8 @@ class Client(object):
         self.group = group
         self.train_data = {k: np.array(v) for k, v in train_data.items()}
         self.eval_data = {k: np.array(v) for k, v in eval_data.items()}
-        self.num_samples = len(self.train_data['y'])
-        self.test_samples = len(self.eval_data['y'])
+        self.num_train_samples = len(self.train_data['y'])
+        self.num_test_samples = len(self.eval_data['y'])
 
     def set_params(self, model_params):
         '''set model parameters'''
@@ -25,14 +25,26 @@ class Client(object):
         '''get model gradient'''
         return self.model.get_gradients(self.train_data, model_len)
 
+    def get_grads_mini_batch(self, mini_batch_data):
+        return self.model.get_gradients_with_mini_batch(mini_batch_data)
+
     def solve_grad(self):
         '''get model gradient with cost'''
         # 使用的 FedDANE
         bytes_w = self.model.size
         grads = self.model.get_gradients(self.train_data)
-        comp = self.model.flops * self.num_samples
+        comp = self.model.flops * self.num_train_samples
         bytes_r = self.model.size
-        return ((self.num_samples, grads), (bytes_w, comp, bytes_r))
+        return ((self.num_train_samples, grads), (bytes_w, comp, bytes_r))
+
+    def solve_sgd(self, mini_batch_data):
+        """
+        运行一次 mini-batch 也就是一次 iteration
+        :param mini_batch_data: X, y
+        :return: grads, loss, weights
+        """
+        grads, loss, weights = self.model.solve_sgd(mini_batch_data)
+        return grads, loss, weights
 
     def solve_inner(self, round_i, num_epochs=1, batch_size=10):
         '''Solves local optimization problem
@@ -49,7 +61,7 @@ class Client(object):
         soln, comp = self.model.solve_inner(data=self.train_data, client_id=self.id, round_i=round_i, num_epochs=num_epochs, batch_size=batch_size)
         bytes_r = self.model.size
         stats = {'id': self.id, 'bytes_w': bytes_w, 'bytes_r': bytes_r, 'comp': comp}
-        return (self.num_samples, soln), stats
+        return (self.num_train_samples, soln), stats
 
     def solve_iters(self, num_iters=1, batch_size=10):
         '''Solves local optimization problem
@@ -65,7 +77,7 @@ class Client(object):
         bytes_w = self.model.size
         soln, comp = self.model.solve_iters(self.train_data, num_iters, batch_size)
         bytes_r = self.model.size
-        return (self.num_samples, soln), (bytes_w, comp, bytes_r)
+        return (self.num_train_samples, soln), (bytes_w, comp, bytes_r)
 
 
     def test(self, on_train=False):
@@ -76,8 +88,8 @@ class Client(object):
         """
         # 这里的模型是更新后的模型(当前还未聚合)
         if on_train:
-            d, ds = self.train_data, self.num_samples
+            d, ds = self.train_data, self.num_train_samples
         else:
-            d, ds = self.eval_data, self.test_samples
+            d, ds = self.eval_data, self.num_test_samples
         tot_correct, loss = self.model.test(d)
         return tot_correct, loss, ds
