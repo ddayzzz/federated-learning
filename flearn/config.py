@@ -11,6 +11,7 @@ MODEL_PARAMS = {
     'nist.mclr': (26,),  # num_classes
     'mnist.mclr': (10,), # num_classes
     'mnist.cnn': (10,),  # num_classes
+    'mnist.mclr_maml': (10,),  # num_classes
     'shakespeare.stacked_lstm': (80, 80, 256), # seq_len, emb_dim, num_hidden
     'synthetic.mclr': (10, ),  # num_classes
     'omniglot.cnn': (5, ),  # num_classes

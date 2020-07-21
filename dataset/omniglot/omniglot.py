@@ -136,6 +136,7 @@ class OmniglotNShot:
         self.root = root
         # 加载数据
         self.x = self.load_data()
+        self.x_train, self.x_test = self.x[:1200], self.x[1200:]
 
     def load_data(self):
         # if root/data.npy does not exist, just download it
@@ -164,7 +165,6 @@ class OmniglotNShot:
         x = np.array(x).astype(np.float)  # [[20 imgs],..., 1623 classes in total]
         # each character contains 20 imgs
         print('>>> Data shape:', x.shape)  # [1623, 20, 84, 84, 1]
-
         return x
 
     def normalization(self):
@@ -287,15 +287,98 @@ class OmniglotNShot:
         with open(test_file, 'wb') as outfile:
             pickle.dump(test_data, outfile, pickle.HIGHEST_PROTOCOL)
 
+    def generate_dataset(self, data_pack, num_tasks):
+        """
+        Collects several batches data for N-shot learning
+        :param data_pack: [cls_num, 20, 84, 84, 1]
+        :return: A list with [support_set_x, support_set_y, target_x, target_y] ready to be fed to our networks
+        """
+        n_way = 5
+        support_shots = 10
+        query_shots = 10
+        #  take 5 way 1 shot as example: 5 * 1
+        setsz = support_shots * n_way
+        querysz = query_shots * n_way
+        data_cache = []
+
+        x_spts, y_spts, x_qrys, y_qrys = [], [], [], []
+        for i in range(num_tasks):  # one batch means one task
+
+            x_spt, y_spt, x_qry, y_qry = [], [], [], []
+            selected_cls = np.random.choice(data_pack.shape[0], n_way, False)
+
+            for j, cur_class in enumerate(selected_cls):
+                selected_img = np.random.choice(20, support_shots + query_shots, False)
+
+                # meta-training and meta-test
+                x_spt.append(data_pack[cur_class][selected_img[:support_shots]])
+                x_qry.append(data_pack[cur_class][selected_img[support_shots:]])
+                y_spt.append([j for _ in range(support_shots)])
+                y_qry.append([j for _ in range(query_shots)])
+
+            # shuffle, 同时 flatten
+            perm = np.random.permutation(n_way * support_shots)
+            x_spt = np.array(x_spt).reshape([n_way * support_shots, self.imgsz * self.imgsz])[perm]
+            y_spt = np.array(y_spt).reshape([n_way * support_shots])[perm]
+            perm = np.random.permutation(n_way * query_shots)
+            x_qry = np.array(x_qry).reshape([n_way * query_shots, self.imgsz * self.imgsz])[perm]
+            y_qry = np.array(y_qry).reshape([n_way * query_shots])[perm]
+
+            x_spts.append(x_spt)
+            y_spts.append(y_spt)
+            x_qrys.append(x_qry)
+            y_qrys.append(y_qry)
+
+        # [num_tasks, setsz, 1, 84, 84]
+        x_spts = np.array(x_spts).astype(np.float32).reshape([num_tasks, setsz, self.imgsz * self.imgsz])
+        y_spts = np.array(y_spts).astype(np.int).reshape([num_tasks, setsz])
+        # [num_tasks, qrysz, 1, 84, 84]
+        x_qrys = np.array(x_qrys).astype(np.float32).reshape([num_tasks, querysz, self.imgsz * self.imgsz])
+        y_qrys = np.array(y_qrys).astype(np.int).reshape([num_tasks, querysz])
+        return (x_spts, y_spts, x_qrys, y_qrys)
+
+    def generate_dataset_for_MAML_in_fl(self, one_hot):
+        self.normalization()
+        (train_x_spts, train_y_spts, train_x_qrys, train_y_qrys) = self.generate_dataset(data_pack=self.x_train, num_tasks=300)
+        (test_x_spts, test_y_spts, test_x_qrys, test_y_qrys) = self.generate_dataset(data_pack=self.x_test, num_tasks=100)
+        # 生成数据
+        train_file = os.sep.join((self.root, 'data', 'train', 'fair_task[400]_1.pkl'))
+        test_file = os.sep.join((self.root, 'data', 'test', 'fair_task[400]_1.pkl'))
+
+        train_data = {'users': [], 'user_data': {}, 'num_samples': []}
+        test_data = {'users': [], 'user_data': {}, 'num_samples': []}
+        # meta-train
+        for i in range(300):
+            uname = "class_" + str(i)
+            # users 是按照顺序添加的, 因此不会造成顺序的问题
+            train_data['users'].append(uname)
+            train_data['user_data'][uname] = {'x': train_x_spts[i], 'y': train_y_spts[i]}
+            test_data['users'].append(uname)
+            test_data['user_data'][uname] = {'x': train_x_qrys[i], 'y': train_y_qrys[i]}
+        # meta-test
+        for i in range(100):
+            uname = "class_" + str(i + 300)
+            # users 是按照顺序添加的, 因此不会造成顺序的问题
+            train_data['users'].append(uname)
+            train_data['user_data'][uname] = {'x': test_x_spts[i], 'y': test_y_spts[i]}
+            test_data['users'].append(uname)
+            test_data['user_data'][uname] = {'x': test_x_qrys[i], 'y': test_y_qrys[i]}
+
+        with open(train_file, 'wb') as outfile:
+            pickle.dump(train_data, outfile, pickle.HIGHEST_PROTOCOL)
+        with open(test_file, 'wb') as outfile:
+            pickle.dump(test_data, outfile, pickle.HIGHEST_PROTOCOL)
+
 
 def load_data():
-    train_file = os.sep.join(('.', 'data', 'train', 'fair_task[400].pkl'))
-    test_file = os.sep.join(('.', 'data', 'test', 'fair_task[400].pkl'))
+    train_file = os.sep.join(('.', 'data', 'train', 'fair_task[400]_1.pkl'))
+    test_file = os.sep.join(('.', 'data', 'test', 'fair_task[400]_1.pkl'))
     with open(train_file, 'rb') as fp:
         train = pickle.load(fp)
     with open(test_file, 'rb') as fp:
         test = pickle.load(fp)
     return train, test
+
 
 def test():
     train, test = load_data()
@@ -317,14 +400,15 @@ def test():
     print(train_mean, train_var, test_mean, test_var)
 
 if __name__ == '__main__':
-    # prefix = os.path.dirname(__file__)
-    # if len(prefix) <= 0:
-    #     prefix = '.'
-    # paths = ['{prefix}{sep}data', '{prefix}{sep}data{sep}train', '{prefix}{sep}data{sep}test']
-    # for path in paths:
-    #     p = path.format(sep=os.sep, prefix=prefix)
-    #     if not os.path.exists(p):
-    #         os.mkdir(p)
-    # omniglot_gen = OmniglotNShot(root=prefix, imgsz=28)
+    prefix = os.path.dirname(__file__)
+    if len(prefix) <= 0:
+        prefix = '.'
+    paths = ['{prefix}{sep}data', '{prefix}{sep}data{sep}train', '{prefix}{sep}data{sep}test']
+    for path in paths:
+        p = path.format(sep=os.sep, prefix=prefix)
+        if not os.path.exists(p):
+            os.mkdir(p)
+    omniglot_gen = OmniglotNShot(root=prefix, imgsz=28)
     # omniglot_gen.generate_dataset_for_fair()
-    test()
+    omniglot_gen.generate_dataset_for_MAML_in_fl(one_hot=False)
+    # test()

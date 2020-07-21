@@ -62,7 +62,7 @@ def main():
     options, learner, trainer_class, dataset_name, sub_data = read_options()
 
     train_path = os.path.join(dataset_prefix, 'dataset', dataset_name, 'data', 'train')
-    test_path = os.path.join(dataset_prefix, 'dataset', dataset_name, 'data', 'train')
+    test_path = os.path.join(dataset_prefix, 'dataset', dataset_name, 'data', 'test')
 
     all_data_info = read_data_pkl(train_path, test_path, sub_data=sub_data)
     # 调用solver

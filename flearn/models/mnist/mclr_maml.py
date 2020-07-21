@@ -1,10 +1,6 @@
 import numpy as np
 import tensorflow as tf
-import tqdm
-
-
-from flearn.utils.model_utils import batch_data
-from flearn.utils.tf_utils import graph_size, process_grad
+from flearn.utils.tf_utils import graph_size
 
 
 class Model(object):
@@ -18,13 +14,13 @@ class Model(object):
         """
         # params
         self.num_classes = num_classes
-        self.train_lr = 1e-2
-        self.meta_lr = 1e-3
+        self.train_lr = 0.01
+        self.meta_lr = 0.001
         # create computation graph
         self.graph = tf.Graph()
         with self.graph.as_default():
             # TODO 参数; 每次运行一个 task/client
-            self.train_op = self.build(K=5, task_num=1, query_shots=10, query_ways=5, sprt_shots=10, sprt_ways=5)
+            self.train_op = self.build(K=5)
             self.saver = tf.train.Saver()
         self.sess = tf.Session(graph=self.graph)
 
@@ -36,7 +32,7 @@ class Model(object):
             opts = tf.profiler.ProfileOptionBuilder.float_operation()
             self.flops = tf.profiler.profile(self.graph, run_meta=metadata, cmd='scope', options=opts).total_float_ops
 
-    def conv_weights(self, input_channel):
+    def fc_weights(self):
         """
         创建网路的参数. 网络的参数保存在
         :param input_channel:
@@ -44,51 +40,12 @@ class Model(object):
         :return: 参数 dict: Dict[name] -> variable
         """
         weights = {}
-
-        conv_initializer = tf.contrib.layers.xavier_initializer_conv2d()
         fc_initializer = tf.contrib.layers.xavier_initializer()
         with tf.variable_scope('MAML', reuse=tf.AUTO_REUSE):
-            weights['conv1'] = tf.get_variable('conv1w', [3, 3, input_channel, 32], initializer=conv_initializer)
-            weights['b1'] = tf.get_variable('conv1b', initializer=tf.zeros([32]))
-            weights['conv2'] = tf.get_variable('conv2w', [3, 3, 32, 32], initializer=conv_initializer)
-            weights['b2'] = tf.get_variable('conv2b', initializer=tf.zeros([32]))
-            weights['conv3'] = tf.get_variable('conv3w', [3, 3, 32, 32], initializer=conv_initializer)
-            weights['b3'] = tf.get_variable('conv3b', initializer=tf.zeros([32]))
-            weights['conv4'] = tf.get_variable('conv4w', [3, 3, 32, 32], initializer=conv_initializer)
-            weights['b4'] = tf.get_variable('conv4b', initializer=tf.zeros([32]))
-            # 灰度图像输出 32, RGB 32*32*5
-            if input_channel == 1:
-                weights['w5'] = tf.get_variable('fc1w', [32, self.num_classes], initializer=fc_initializer)
-            elif input_channel == 3:
-                weights['w5'] = tf.get_variable('fc1w', [32 * 5 * 5, self.num_classes], initializer=fc_initializer)
-            weights['b5'] = tf.get_variable('fc1b', initializer=tf.zeros([self.num_classes]))
-
+            weights['fc1_w'] = tf.get_variable('fc1_w', [28 * 28, self.num_classes], initializer=fc_initializer)
+            weights['fc1_b'] = tf.get_variable('fc1_b', initializer=tf.zeros([self.num_classes]))
         return weights
 
-    def conv_block(self, x, weight, bias, scope):
-        """
-        build a block with conv2d->pooling. 暂时删除 batch_norm 的设置
-        :param x: 输入的张量
-        :param weight: conv2d 的 weight
-        :param bias: conv2d 的 bias
-        :param scope:
-        :return:
-        """
-        # conv
-        x = tf.nn.conv2d(x, weight, [1, 1, 1, 1], 'SAME', name=scope + '_conv2d') + bias
-        # batch norm, activation_fn=tf.nn.relu,
-        # NOTICE: must have tf.layers.batch_normalization
-        # x = tf.contrib.layers.batch_norm(x, activation_fn=tf.nn.relu)
-        # with tf.variable_scope('MAML'):
-            # 这里将不会被写入到计算图的 normalization 添加到 MAML scope 中, 这样才可以被优化到
-            # train is set to True ALWAYS, please refer to https://github.com/cbfinn/maml/issues/9
-            # when FLAGS.train=True, we still need to build evaluation network
-            # x = tf.layers.batch_normalization(x, training=True, name=scope + '_bn', reuse=tf.AUTO_REUSE)
-        # relu
-        x = tf.nn.relu(x, name=scope + '_relu')
-        # pooling
-        x = tf.nn.max_pool(x, [1, 2, 2, 1], [1, 2, 2, 1], 'VALID', name=scope + '_pool')
-        return x
 
     def forward(self, x, weights):
         """
@@ -98,19 +55,7 @@ class Model(object):
         :param training:
         :return: logits
         """
-        hidden1 = self.conv_block(x, weights['conv1'], weights['b1'], 'conv0')
-        hidden2 = self.conv_block(hidden1, weights['conv2'], weights['b2'], 'conv1')
-        hidden3 = self.conv_block(hidden2, weights['conv3'], weights['b3'], 'conv2')
-        hidden4 = self.conv_block(hidden3, weights['conv4'], weights['b4'], 'conv3')
-
-        # get_shape is static shape, (5, 5, 5, 32)
-        # print('flatten:', hidden4.get_shape())
-        # flatten layer
-        # TODO 灰度图像, dim1 = dim2 = 1, 可使用  reduce_mean 去掉
-        hidden4 = tf.reshape(hidden4, [-1, np.prod([int(dim) for dim in hidden4.get_shape()[1:]])], name='reshape2')
-
-        output = tf.add(tf.matmul(hidden4, weights['w5']), weights['b5'], name='fc1')
-
+        output = tf.add(tf.matmul(x, weights['fc1_w']), weights['fc1_b'], name='fc1')
         return output
 
     def meta_task(self, support_x, support_y, query_x, query_y, K):
@@ -129,8 +74,7 @@ class Model(object):
         # support set 的损失函数
         support_loss = tf.nn.softmax_cross_entropy_with_logits(logits=support_pred, labels=support_y)
         # support set 预测正确的数量
-        support_correct_count = tf.count_nonzero(
-            tf.equal(tf.argmax(support_y, axis=1), tf.argmax(tf.nn.softmax(support_pred, dim=1), axis=1)))
+        support_correct_count = tf.count_nonzero(tf.equal(tf.argmax(support_y, axis=1), tf.argmax(tf.nn.softmax(support_pred, dim=1), axis=1)))
 
         # 计算梯度
         grads = tf.gradients(support_loss, list(self.weights.values()))
@@ -178,7 +122,7 @@ class Model(object):
 
         return support_loss, support_correct_count, query_losses, query_correct_count
 
-    def build(self, K, task_num, sprt_ways, sprt_shots, query_ways, query_shots, mode='train'):
+    def build(self, K, mode='train'):
         """
         构建网络
         :param K: 第一梯度下降的次数
@@ -199,13 +143,11 @@ class Model(object):
         self.query_xb = tf.placeholder(dtype=tf.float32, name='query_xb', shape=[None, 28 * 28])
         self.query_yb = tf.placeholder(dtype=tf.int32, name='query_yb', shape=[None])
 
-        support_xb_reshaped = tf.reshape(self.support_xb, shape=[-1, 28, 28, 1])
-        query_xb_reshaped = tf.reshape(self.support_xb, shape=[-1, 28, 28, 1])
-        support_yb_one_hot = tf.one_hot(self.support_yb, depth=sprt_ways)
-        query_yb_one_hot = tf.one_hot(self.query_yb, depth=query_ways)
+        support_yb_one_hot = tf.one_hot(self.support_yb, depth=self.num_classes)
+        query_yb_one_hot = tf.one_hot(self.query_yb, depth=self.num_classes)
         # create or reuse network variable, not including batch_norm variable, therefore we need extra reuse mechnism
         # to reuse batch_norm variables.
-        self.weights = self.conv_weights(input_channel=1)
+        self.weights = self.fc_weights()
         # TODO: meta-test is sort of test stage.
         # 然而没有设用这个代码
         # training = True if mode is 'train' else False
@@ -215,9 +157,7 @@ class Model(object):
         # result = tf.map_fn(meta_task, elems=(support_xb_reshaped, support_yb_one_hot, query_xb_reshaped, query_yb_one_hot),
         #                    dtype=out_dtype, parallel_iterations=task_num, name='map_fn')
         # 输出结果
-        support_loss, support_correct_count, query_losses, query_correct_counts = self.meta_task(
-            support_x=support_xb_reshaped, support_y=support_yb_one_hot, query_x=query_xb_reshaped, query_y=query_yb_one_hot,
-            K=K)
+        support_loss, support_correct_count, query_losses, query_correct_counts = self.meta_task(support_x=self.support_xb, support_y=support_yb_one_hot, query_x=self.query_xb, query_y=query_yb_one_hot, K=K)
         # support 上的损失, 向量. 需要把 loss 平均一下. scalar
         self.support_loss = tf.reduce_mean(support_loss)
         # [T_1, T_2,...,T_K] 上的平均. -> [K]
@@ -261,33 +201,17 @@ class Model(object):
         return dict(zip(self.weights.keys(), model_params))
 
     def solve_gd(self, sprt_data, query_data):
-        sprt_xb, sprt_yb, query_xb, query_yb = sprt_data[0], sprt_data[1], query_data[0], query_data[1]
+        sprt_xb, sprt_yb, query_xb, query_yb = sprt_data['x'], sprt_data['y'], query_data['x'], query_data['y']
         # 由于每一个客户端视为一个 task, 所以需要扩张第一维
         # feed_dict = dict(zip([self.support_xb, self.support_yb, self.query_xb, self.query_yb], map(lambda x: np.expand_dims(x, 0), [sprt_xb, sprt_yb, query_xb, query_yb])))
         feed_dict = {self.support_xb: sprt_xb, self.support_yb: sprt_yb, self.query_xb: query_xb,
                      self.query_yb: query_yb}
         with self.graph.as_default():
-            support_loss, support_cnt, query_losses, query_cnt, _ = self.sess.run(
-                [self.support_loss, self.support_correct_count, self.query_losses, self.query_correct_count,
-                 self.train_op], feed_dict=feed_dict)
+            support_loss, support_cnt, query_losses, query_cnt, _ = self.sess.run([self.support_loss, self.support_correct_count, self.query_losses, self.query_correct_count, self.train_op], feed_dict=feed_dict)
         params = self.get_params()
         num_samples = len(sprt_yb) + len(query_yb)
         comp = num_samples * self.flops
         return params, comp, num_samples, (support_loss, support_cnt, query_losses, query_cnt)
-
-    def solve_sgd(self, sprt_data_batch, query_data):
-        sprt_xb, sprt_yb, query_xb, query_yb = sprt_data_batch[0], sprt_data_batch[1], query_data['x'], query_data['y']
-        # 由于每一个客户端视为一个 task, 所以需要扩张第一维
-        feed_dict = {self.support_xb: sprt_xb, self.support_yb: sprt_yb, self.query_xb: query_xb, self.query_yb: query_yb}
-        with self.graph.as_default():
-            support_loss, support_cnt = self.sess.run(
-                [self.support_loss, self.support_correct_count], feed_dict=feed_dict)
-        # params = self.get_params()
-        num_sprt_samples = len(sprt_yb)
-        num_qry_samples = len(query_yb)
-        # comp = num_samples * self.flops
-        # return params, comp, num_samples, (support_loss, support_cnt)
-        # return num_sprt_samples, num_qry_samples, support_loss, support_cnt, query_losses, query_cnt
 
     def test(self, support_data, query_data):
         """
@@ -300,8 +224,8 @@ class Model(object):
         feed_dict = {self.support_xb: sprt_xb, self.support_yb: sprt_yb, self.query_xb: query_xb,
                      self.query_yb: query_yb}
         with self.graph.as_default():
-            support_loss, support_cnt, query_losses, query_cnt, _ = self.sess.run(
-                [self.support_loss, self.support_correct_count, self.query_losses, self.query_correct_count, self.train_op],
+            support_loss, support_cnt, query_losses, query_cnt, = self.sess.run(
+                [self.support_loss, self.support_correct_count, self.query_losses, self.query_correct_count],
                 feed_dict=feed_dict)
         return support_loss, support_cnt, query_losses, query_cnt
 
