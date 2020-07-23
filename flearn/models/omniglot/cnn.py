@@ -36,7 +36,27 @@ class Model(object):
             opts = tf.profiler.ProfileOptionBuilder.float_operation()
             self.flops = tf.profiler.profile(self.graph, run_meta=metadata, cmd='scope', options=opts).total_float_ops
 
-    def conv_weights(self, input_channel):
+    def create_conv_variables(self, kernel_size, in_dim, out_dim, conv_name, kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d):
+        """
+        创建卷积层的变量
+        :param kernel_size:
+        :param in_dim:
+        :param out_dim:
+        :param conv_name:
+        :param kernel_initializer:
+        :return:
+        """
+        w = tf.get_variable(conv_name + '_w', [kernel_size, kernel_size, in_dim, out_dim], initializer=kernel_initializer())
+        b = tf.get_variable(conv_name + '_b', initializer=tf.zeros([out_dim]))
+        return (w, b)
+
+    def create_fc_variables(self, in_dim, out_dim, fc_name,
+                            weight_initializer=tf.contrib.layers.xavier_initializer):
+        w = tf.get_variable(fc_name + '_w', [in_dim, out_dim], initializer=weight_initializer())
+        b = tf.get_variable(fc_name + '_b', initializer=tf.zeros([out_dim]))
+        return (w, b)
+
+    def create_params(self):
         """
         创建网路的参数. 网络的参数保存在
         :param input_channel:
@@ -44,25 +64,26 @@ class Model(object):
         :return: 参数 dict: Dict[name] -> variable
         """
         weights = {}
-
-        conv_initializer = tf.contrib.layers.xavier_initializer_conv2d()
-        fc_initializer = tf.contrib.layers.xavier_initializer()
         with tf.variable_scope('MAML', reuse=tf.AUTO_REUSE):
-            weights['conv1'] = tf.get_variable('conv1w', [3, 3, input_channel, 32], initializer=conv_initializer)
-            weights['b1'] = tf.get_variable('conv1b', initializer=tf.zeros([32]))
-            weights['conv2'] = tf.get_variable('conv2w', [3, 3, 32, 32], initializer=conv_initializer)
-            weights['b2'] = tf.get_variable('conv2b', initializer=tf.zeros([32]))
-            weights['conv3'] = tf.get_variable('conv3w', [3, 3, 32, 32], initializer=conv_initializer)
-            weights['b3'] = tf.get_variable('conv3b', initializer=tf.zeros([32]))
-            weights['conv4'] = tf.get_variable('conv4w', [3, 3, 32, 32], initializer=conv_initializer)
-            weights['b4'] = tf.get_variable('conv4b', initializer=tf.zeros([32]))
-            # 灰度图像输出 32, RGB 32*32*5
-            if input_channel == 1:
-                weights['w5'] = tf.get_variable('fc1w', [32, self.num_classes], initializer=fc_initializer)
-            elif input_channel == 3:
-                weights['w5'] = tf.get_variable('fc1w', [32 * 5 * 5, self.num_classes], initializer=fc_initializer)
-            weights['b5'] = tf.get_variable('fc1b', initializer=tf.zeros([self.num_classes]))
-
+            # weights['conv1'] = tf.get_variable('conv1w', [3, 3, input_channel, 32], initializer=conv_initializer)
+            # weights['b1'] = tf.get_variable('conv1b', initializer=tf.zeros([32]))
+            # weights['conv2'] = tf.get_variable('conv2w', [3, 3, 32, 32], initializer=conv_initializer)
+            # weights['b2'] = tf.get_variable('conv2b', initializer=tf.zeros([32]))
+            # weights['conv3'] = tf.get_variable('conv3w', [3, 3, 32, 32], initializer=conv_initializer)
+            # weights['b3'] = tf.get_variable('conv3b', initializer=tf.zeros([32]))
+            # weights['conv4'] = tf.get_variable('conv4w', [3, 3, 32, 32], initializer=conv_initializer)
+            # weights['b4'] = tf.get_variable('conv4b', initializer=tf.zeros([32]))
+            # # 灰度图像输出 32, RGB 32*32*5
+            # if input_channel == 1:
+            #     weights['w5'] = tf.get_variable('fc1w', [32, self.num_classes], initializer=fc_initializer)
+            # elif input_channel == 3:
+            #     weights['w5'] = tf.get_variable('fc1w', [32 * 5 * 5, self.num_classes], initializer=fc_initializer)
+            # weights['b5'] = tf.get_variable('fc1b', initializer=tf.zeros([self.num_classes]))
+            (weights['conv1w'], weights['conv1b']) = self.create_conv_variables(3, 1, 32, 'conv1')
+            (weights['conv2w'], weights['conv2b']) = self.create_conv_variables(3, 32, 32, 'conv2')
+            (weights['conv3w'], weights['conv3b']) = self.create_conv_variables(3, 32, 32, 'conv3')
+            (weights['conv4w'], weights['conv4b']) = self.create_conv_variables(3, 32, 32, 'conv4')
+            (weights['fc1w'], weights['fc1b']) = self.create_fc_variables(32, self.num_classes, 'fc1')
         return weights
 
     def conv_block(self, x, weight, bias, scope):
@@ -90,6 +111,14 @@ class Model(object):
         x = tf.nn.max_pool(x, [1, 2, 2, 1], [1, 2, 2, 1], 'VALID', name=scope + '_pool')
         return x
 
+    def fc_block(self, x, weight, bias, name, flatten=False, act=tf.nn.relu):
+        if flatten:
+            x = tf.reshape(x, [-1, np.prod([int(dim) for dim in x.get_shape()[1:]])], name=name + '_flatten')
+        x = tf.add(tf.matmul(x, weight), bias, name=name + '_out')
+        if act is not None:
+            x = act(x, name=name + '_act')
+        return x
+
     def forward(self, x, weights):
         """
         前向操作, 组合相关的参数
@@ -98,19 +127,12 @@ class Model(object):
         :param training:
         :return: logits
         """
-        hidden1 = self.conv_block(x, weights['conv1'], weights['b1'], 'conv0')
-        hidden2 = self.conv_block(hidden1, weights['conv2'], weights['b2'], 'conv1')
-        hidden3 = self.conv_block(hidden2, weights['conv3'], weights['b3'], 'conv2')
-        hidden4 = self.conv_block(hidden3, weights['conv4'], weights['b4'], 'conv3')
-
-        # get_shape is static shape, (5, 5, 5, 32)
-        # print('flatten:', hidden4.get_shape())
-        # flatten layer
+        hidden1 = self.conv_block(x, weights['conv1w'], weights['conv1b'], 'conv1')
+        hidden2 = self.conv_block(hidden1, weights['conv2w'], weights['conv2b'], 'conv2')
+        hidden3 = self.conv_block(hidden2, weights['conv3w'], weights['conv3b'], 'conv3')
+        hidden4 = self.conv_block(hidden3, weights['conv4w'], weights['conv4b'], 'conv4')
         # TODO 灰度图像, dim1 = dim2 = 1, 可使用  reduce_mean 去掉
-        hidden4 = tf.reshape(hidden4, [-1, np.prod([int(dim) for dim in hidden4.get_shape()[1:]])], name='reshape2')
-
-        output = tf.add(tf.matmul(hidden4, weights['w5']), weights['b5'], name='fc1')
-
+        output = self.fc_block(hidden4, weights['fc1w'], weights['fc1b'], name='fc1', act=None, flatten=True)
         return output
 
     def meta_task(self, support_x, support_y, query_x, query_y, K):
@@ -205,7 +227,7 @@ class Model(object):
         query_yb_one_hot = tf.one_hot(self.query_yb, depth=query_ways)
         # create or reuse network variable, not including batch_norm variable, therefore we need extra reuse mechnism
         # to reuse batch_norm variables.
-        self.weights = self.conv_weights(input_channel=1)
+        self.weights = self.create_params()
         # TODO: meta-test is sort of test stage.
         # 然而没有设用这个代码
         # training = True if mode is 'train' else False
@@ -260,8 +282,8 @@ class Model(object):
             model_params = self.sess.run(list(self.weights.values()))
         return dict(zip(self.weights.keys(), model_params))
 
-    def solve_gd(self, sprt_data, query_data):
-        sprt_xb, sprt_yb, query_xb, query_yb = sprt_data[0], sprt_data[1], query_data[0], query_data[1]
+    def solve_gd_mini_batch(self, sprt_batch, query_batch):
+        sprt_xb, sprt_yb, query_xb, query_yb = sprt_batch[0], sprt_batch[1], query_batch[0], query_batch[1]
         # 由于每一个客户端视为一个 task, 所以需要扩张第一维
         # feed_dict = dict(zip([self.support_xb, self.support_yb, self.query_xb, self.query_yb], map(lambda x: np.expand_dims(x, 0), [sprt_xb, sprt_yb, query_xb, query_yb])))
         feed_dict = {self.support_xb: sprt_xb, self.support_yb: sprt_yb, self.query_xb: query_xb,
@@ -275,19 +297,20 @@ class Model(object):
         comp = num_samples * self.flops
         return params, comp, num_samples, (support_loss, support_cnt, query_losses, query_cnt)
 
-    def solve_sgd(self, sprt_data_batch, query_data):
-        sprt_xb, sprt_yb, query_xb, query_yb = sprt_data_batch[0], sprt_data_batch[1], query_data['x'], query_data['y']
+    def solve_gd(self, support_data, query_data):
+        sprt_xb, sprt_yb, query_xb, query_yb = support_data['x'], support_data['y'], query_data['x'], query_data['y']
         # 由于每一个客户端视为一个 task, 所以需要扩张第一维
-        feed_dict = {self.support_xb: sprt_xb, self.support_yb: sprt_yb, self.query_xb: query_xb, self.query_yb: query_yb}
+        feed_dict = {self.support_xb: sprt_xb, self.support_yb: sprt_yb, self.query_xb: query_xb,
+                     self.query_yb: query_yb}
         with self.graph.as_default():
-            support_loss, support_cnt = self.sess.run(
-                [self.support_loss, self.support_correct_count], feed_dict=feed_dict)
-        # params = self.get_params()
-        num_sprt_samples = len(sprt_yb)
-        num_qry_samples = len(query_yb)
-        # comp = num_samples * self.flops
-        # return params, comp, num_samples, (support_loss, support_cnt)
-        # return num_sprt_samples, num_qry_samples, support_loss, support_cnt, query_losses, query_cnt
+            support_loss, support_cnt, query_losses, query_cnt, _ = self.sess.run(
+                [self.support_loss, self.support_correct_count, self.query_losses, self.query_correct_count,
+                 self.train_op],
+                feed_dict=feed_dict)
+        params = self.get_params()
+        num_samples = len(sprt_yb) + len(query_yb)
+        comp = num_samples * self.flops
+        return params, comp, num_samples, (support_loss, support_cnt, query_losses, query_cnt)
 
     def test(self, support_data, query_data):
         """
@@ -300,6 +323,7 @@ class Model(object):
         feed_dict = {self.support_xb: sprt_xb, self.support_yb: sprt_yb, self.query_xb: query_xb,
                      self.query_yb: query_yb}
         with self.graph.as_default():
+            # 需要运行 train_op.
             support_loss, support_cnt, query_losses, query_cnt, _ = self.sess.run(
                 [self.support_loss, self.support_correct_count, self.query_losses, self.query_correct_count, self.train_op],
                 feed_dict=feed_dict)

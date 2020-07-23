@@ -32,7 +32,7 @@ class Server(BaseFedarated):
         total_samples = np.sum(np.asarray(num_samples))
         self.pk = [item * 1.0 / total_samples for item in num_samples]
 
-    def select_clients_with_held_out(self, round_i, num_clients=20):
+    def select_clients_with_held_out(self, round_i, num_clients, is_uniform=False):
         """
         前300为训练, 后100不管
         :param round_i:
@@ -40,30 +40,51 @@ class Server(BaseFedarated):
         :return:
         """
         np.random.seed(round_i)
-        # 这里的策略为: 按照拥有的数据的比例 + 普通形式聚合
-        indices = np.random.choice(self.held_out_for_train, num_clients, replace=False, p=self.pk)
-        # 可能有重复, 如果 pk 不均匀的话
-        return indices, np.asarray(self.clients)[indices]
+        if is_uniform:
+            indices = np.random.choice(self.held_out_for_train, num_clients, replace=False)
+            # 可能有重复, 如果 pk 不均匀的话
+            return indices, np.asarray(self.clients)[indices]
+        else:
+            # 这里的策略为: 按照拥有的数据的比例 + 普通形式聚合
+            indices = np.random.choice(self.held_out_for_train, num_clients, replace=False, p=self.pk)
+            # 可能有重复, 如果 pk 不均匀的话
+            return indices, np.asarray(self.clients)[indices]
 
-    def aggregate(self, wsolns):
+    def aggregate_simple(self, wsolns):
         """
-        MAML 的聚合是普通的聚合
+        普通格式的聚合
+        :param wsolns:
+        :return:
+        """
+        new_weights = dict()
+        weight_keys = wsolns[0].keys()
+        client_num = len(wsolns)
+        for k in weight_keys:
+            new_weights[k] = np.zeros_like(wsolns[0][k])
+            for sol in wsolns:
+                new_weights[k] += sol[k]
+            new_weights[k] /= client_num
+        return new_weights
+
+    def aggregate_weighted(self, wsolns, num_samples):
+        """
+        按照某个数量加权聚合
         :param wsolns:
         :return:
         """
         # TODO 这里假设所有的设备的数据量相同, 这一点在元学习中是可以保障的; 另, 这里直接修改了值应该是不存在引用
         new_weights = dict()
-        weight_keys = wsolns[0][1].keys()
+        weight_keys = wsolns[0].keys()
         for k in weight_keys:
-            new_weights[k] = np.zeros_like(wsolns[0][1][k])
-            total_num = 0
-            for num_samples, sol in wsolns:
-                new_weights[k] += sol[k] * num_samples
-                total_num += num_samples
-            new_weights[k] /= total_num
+            new_weights[k] = np.zeros_like(wsolns[0][k])
+            size = 0
+            for sz, sol in zip(num_samples, wsolns):
+                new_weights[k] += sol[k] * sz
+                size += sz
+            new_weights[k] /= size
         return new_weights
 
-    def local_test_only_acc_test_after_k_support(self, round_i, train_batches, k=5, sync_params=True):
+    def local_test_only_acc_test_after_k_support(self, round_i, sync_params=True):
         """
         测试
         :param round_i:
@@ -79,21 +100,13 @@ class Server(BaseFedarated):
         total_query_k_corrects = []
         total_query_data_num = 0
         query_data_num = []
+        # 仅仅在 meta-test 的设备中运行
         for c in self.clients[self.held_out_for_train:]:
             if sync_params:
                 self.client_model.set_params(self.latest_model)
             support_data, query_data = c.train_data, c.eval_data
-            # support 都是一维, acc 等都是更新次数的维度
+            # support 都是一维, query的结果 等都是更新次数的维度
             support_loss, support_correct, query_losses, query_correct = c.model.test(support_data, query_data)
-            #
-            # for update_step in range(k):
-            #     train_batch = next(train_batches[c])
-            #     num_sprt_samples, num_qry_samples, support_loss, support_cnt, query_losses, query_cnt = c.model.solve_sgd(train_batch, c.eval_data)
-            #     total_query_data_num += num_qry_samples
-            #     total_query_k_losses.append(query_losses)
-            #     total_query_k_corrects.append(query_cnt)
-            #     query_data_num.append(num_qry_samples)
-            # g = 5
             # 此时的模型参数如同之前的
             train_sz = c.num_train_samples
             test_sz = c.num_test_samples
@@ -126,25 +139,22 @@ class Server(BaseFedarated):
         # 这个地方是生成 train 和 test 的迭代器. 使用 next 即可进行一次迭代. batch
         train_batches = {}
         for c in self.clients:
-            train_batches[c] = gen_batch(c.train_data, self.batch_size, self.num_rounds + 2)
+            train_batches[c.id] = gen_batch(c.train_data, self.batch_size, self.num_rounds)
 
         test_batches = {}
         for c in self.clients:
-            test_batches[c] = gen_batch(c.eval_data, self.batch_size, self.num_rounds + 2)
+            test_batches[c.id] = gen_batch(c.eval_data, self.batch_size, self.num_rounds)
 
         print('Have generated training and testing batches for all devices/tasks...')
 
 
-        for i in range(self.num_rounds + 1):
-            if (i + 1) % self.eval_every_round:
-                self.local_test_only_acc_test_after_k_support(i, train_batches=train_batches, k=5, sync_params=True)
-                # corr和loss都混合了 support 和 query 的准确率
-                # mean_corr = np.mean(corrects)
-                # mean_loss = np.mean(losses)
-                # print(f'Mean corr: {mean_corr}, mean loss: {mean_loss}')
+        for i in range(self.num_rounds):
+            if (i + 1) % self.eval_every_round == 0:
+                # 输出 meta-test 的客户端所执行的任务的平均准确率和损失
+                self.local_test_only_acc_test_after_k_support(i, sync_params=True)
             print('Round', i)
-            # TODO 训练 train 的数据, 这里client 会重复? 如果有重复就没必要再进行更新吧?
-            indices, selected_clients = self.select_clients_with_held_out(round_i=i, num_clients=self.clients_per_round)
+            # 采样
+            indices, selected_clients = self.select_clients_with_held_out(round_i=i, num_clients=self.clients_per_round, is_uniform=True)
 
             selected_clients = selected_clients.tolist()
             wsolns = []
@@ -152,28 +162,22 @@ class Server(BaseFedarated):
             for c in selected_clients:
                 # communicate the latest model
                 c.set_params(self.latest_model)
-                # 使用 mini-bacth
-                support_bacth = next(train_batches[c])
-                query_batch = next(test_batches[c])
-                # print('TRAIN TEST DIFF:', np.sum(support_bacth[0] - query_batch[0]))
-                params, comp, num_samples, (support_loss, support_acc, query_losses, query_accs) = c.model.solve_gd(support_bacth, query_batch)
-                # print(c.id, support_loss, support_acc, query_losses, query_accs)
-                # train_stats = {'loss': float(support_loss), 'acc': float(support_acc)}
-
-                # self.metrics.update_train_stats_only_acc_loss(round_i=i, train_stats=train_stats)
-                # stats = dict()
-                # for k, (k_step_corr, k_step_loss) in enumerate(zip(query_accs, query_losses)):
-                #     stats['step_' + str(k) + '_loss'] = float(k_step_loss)
-                #     stats['step_' + str(k) + '_acc'] = float(k_step_corr)
-                # self.metrics.update_custom_scalars(round_i=i, **stats)
+                # 使用 mini-batch
+                support_bacth = next(train_batches[c.id])
+                query_batch = next(test_batches[c.id])
+                params, comp, num_samples, (support_loss, support_acc, query_losses, query_accs) = c.model.solve_gd_mini_batch(support_bacth, query_batch)
+                # 使用 full-batch 的梯度下降
+                # params, comp, num_samples, (support_loss, support_cnt, query_losses, query_cnt) = c.model.solve_gd(c.train_data, c.eval_data)
+                #
+                # print('Support loss:', support_loss, 'acc:', support_cnt / c.num_train_samples)
                 wsolns.append(params)
                 samples.append(num_samples)
 
-            self.latest_model = self.aggregate(list(zip(samples, wsolns)))
+            self.latest_model = self.aggregate_weighted(wsolns, samples)
+            # self.latest_model = self.aggregate_simple(wsolns)
 
-            # if (i + 1) % self.save_every_round:
+            # if (i + 1) % self.save_every_round == 0:
             #     self.metrics.write()
-        print("###### finish meta-training, start meta-testing ######")
 
 
         # test_accuracies = []
