@@ -225,7 +225,7 @@ class Metrics2(object):
         # customs
         self.customs_data = dict()
         self.num_rounds = num_rounds
-        self.result_path = mkdir(os.path.join('./result', self.options['dataset']))
+        self.result_path = mkdir(os.path.join(options['result_prefix'], self.options['dataset']))
         # suffix = '{}_sd{}_lr{}_ep{}_bs{}_{}'.format(name,
         #                                             options['seed'],
         #                                             options['lr'],
@@ -329,3 +329,5 @@ class Metrics2(object):
 
         with open(metrics_dir, 'w') as ouf:
             json.dump(metrics, ouf)
+        with open(os.path.join(self.result_path, self.exp_name, 'params.json'), 'w') as ouf:
+            json.dump(self.options, ouf)

@@ -216,7 +216,11 @@ def choose_model_criterion(options):
         # 输入的channel, 要求输入的数据为 [B, H, W, C]
         # options['input_shape'] = [1, 28, 28]
         # model = CNN(num_classes=options['num_class'], num_channels=options['input_shape'][0])
-        model = SimpleCNNMNIST()
+        if algo == 'maml':
+            from flmod.models.meta_learn.omniglot import ConvolutionalNeuralNetwork
+            model = ConvolutionalNeuralNetwork(in_channels=1, out_features=5)
+        else:
+            model = SimpleCNNMNIST()
     elif model_name == 'logistic':
         if algo == 'fedavg_schemes':
             model = Logistic(options['input_shape'], options['num_class'], weight_init=torch.nn.init.zeros_)

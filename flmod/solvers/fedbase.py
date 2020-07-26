@@ -11,7 +11,7 @@ from flmod.models.workers import choose_worker
 
 class BaseFedarated(object):
 
-    def __init__(self, options, model, dataset, optimizer, criterion, worker=None, append2metric=None):
+    def __init__(self, options, model, dataset, optimizer, criterion, worker=None, client=None, append2metric=None):
         """
         定义联邦学习的基本的服务器, 这里的模型是在所有的客户端之间共享使用
         :param options: 参数配置
@@ -25,7 +25,8 @@ class BaseFedarated(object):
         # if worker is None:
         #     from flmod.models.workers import Worker
         #     worker = Worker(model=model, criterion=criterion, optimizer=optimizer, options=options)
-        worker_class = choose_worker(options)
+        worker_class = choose_worker(options) if worker is None else worker
+        client_class = BaseClient if client is None else client
         self.worker = worker_class(model=model, criterion=criterion, optimizer=optimizer, options=options)
         self.device = options['device']
         # 记录总共的训练数据
@@ -33,7 +34,7 @@ class BaseFedarated(object):
         self.options = options
         self.clients = self.setup_clients(dataset=dataset,
                                           criterion=criterion,
-                                          worker=worker,
+                                          client_class=client_class,
                                           batch_size=options['batch_size'])
         self.num_epochs = options['num_epochs']
         self.num_rounds = options['num_rounds']
@@ -47,7 +48,7 @@ class BaseFedarated(object):
         self.metrics = Metrics(clients=self.clients, options=options, name=self.name, append2suffix=append2metric)
         self.print_result = True if options['quiet'] == 0 else False
 
-    def setup_clients(self, dataset, criterion, worker, batch_size):
+    def setup_clients(self, dataset, criterion, client_class, batch_size):
         users, groups, train_data, test_data, entire_train_dataset, entire_test_dataset, dataset_cfg = dataset
         # 配置相关的参数
         dataset_wrapper = dataset_cfg.get('dataset_wrapper')
@@ -67,7 +68,7 @@ class BaseFedarated(object):
                 #     user_id = int(user)
                 self.num_train_data += len(train_data[user]['x_index'])
                 # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
-                c = BaseClient(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
+                c = client_class(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
                                train_dataset=DatasetSplit(entire_train_dataset, idxs=train_data[user]['x_index']),
                                test_dataset=DatasetSplit(entire_train_dataset, test_data[user]['x_index']))
                 all_clients.append(c)
@@ -86,7 +87,7 @@ class BaseFedarated(object):
                 tr = dataset_wrapper(train_data[user], options=self.options)
                 te = dataset_wrapper(test_data[user], options=self.options)
                 self.num_train_data += len(tr)
-                c = BaseClient(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
+                c = client_class(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
                                train_dataset=tr,
                                test_dataset=te)
                 all_clients.append(c)
@@ -104,7 +105,7 @@ class BaseFedarated(object):
                 #     user_id = int(user)
                 self.num_train_data += len(train_data[user]['x_index'])
                 # c = Client(user_id, group, train_data[user], test_data[user], self.batch_size, self.worker)
-                c = BaseClient(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
+                c = client_class(id=user, worker=self.worker, batch_size=batch_size, criterion=criterion,
                                train_dataset=DatasetSplit(entire_train_dataset, idxs=train_data[user]['x_index']),
                                test_dataset=DatasetSplit(entire_test_dataset, test_data[user]['x_index']))
                 all_clients.append(c)

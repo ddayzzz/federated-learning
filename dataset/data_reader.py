@@ -1,18 +1,13 @@
 import pickle
 import os
+import json
+from collections import defaultdict
 
 
-
-__all__ = ['mkdir', 'read_data_pkl', ]
-
-
-def mkdir(path):
-    if not os.path.exists(path):
-        os.makedirs(path, exist_ok=True)
-    return path
+__all__ = ['read_data', ]
 
 
-def read_data_pkl(train_data_dir, test_data_dir, sub_data=None):
+def _read_data_pkl(train_data_dir, test_data_dir, sub_data=None):
     """
     解析数据
     :param train_data_dir: 训练数据目录, 自动读取 pkl
@@ -64,3 +59,41 @@ def read_data_pkl(train_data_dir, test_data_dir, sub_data=None):
     clients = list(sorted(train_data_index.keys()))
     return clients, groups, train_data_index, test_data_index
 
+
+def _read_dir_leaf(data_dir):
+    print('>>> Read data from:', data_dir)
+    clients = []
+    groups = []
+    # 如果 dict 对象不存在时候, 不raise一个KeyError
+    data = defaultdict(lambda: None)
+
+    files = os.listdir(data_dir)
+    files = [f for f in files if f.endswith('.json')]
+    for f in files:
+        file_path = os.path.join(data_dir, f)
+        with open(file_path, 'r') as inf:
+            cdata = json.load(inf)
+        clients.extend(cdata['users'])
+        if 'hierarchies' in cdata:
+            groups.extend(cdata['hierarchies'])
+        data.update(cdata['user_data'])
+
+    clients = list(sorted(data.keys()))
+    return clients, groups, data
+
+
+def read_data(train_data_dir, test_data_dir, data_format, sub_data=None):
+    if data_format == 'json':
+        # 这里的数据集不区分对应的格式
+        assert sub_data is None, 'LEAF 格式的数据保存为多个 JSON 文件, 不能指定 subdata 名'
+        train_clients, train_groups, train_data = _read_dir_leaf(train_data_dir)
+        test_clients, test_groups, test_data = _read_dir_leaf(test_data_dir)
+
+        assert train_clients == test_clients
+        assert train_groups == test_groups
+
+        return train_clients, train_groups, train_data, test_data
+    elif data_format == 'pkl':
+        return _read_data_pkl(train_data_dir, test_data_dir, sub_data)
+    else:
+        raise ValueError('仅仅支持两种格式的数据: *.pkl, *.json')

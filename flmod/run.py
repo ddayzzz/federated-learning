@@ -1,10 +1,9 @@
 import numpy as np
-import argparse
 import importlib
 import torch
 import os
 import random
-from flmod.utils.worker_utils import read_data_pkl
+from dataset.data_reader import read_data
 from flmod.config import DATASETS, TRAINERS
 from flmod.config import model_settings
 from flmod.config import base_options, add_dynamic_options
@@ -58,9 +57,9 @@ def main():
     options, trainer_class, dataset_name, sub_data = read_options()
 
     train_path = os.path.join(dataset_prefix, 'dataset', dataset_name, 'data', 'train')
-    test_path = os.path.join(dataset_prefix, 'dataset', dataset_name, 'data', 'train')
+    test_path = os.path.join(dataset_prefix, 'dataset', dataset_name, 'data', 'test')
 
-    all_data_info, (train_dataset, test_datatset) = read_data_pkl(train_path, test_path, sub_data=sub_data), \
+    all_data_info, (train_dataset, test_datatset) = read_data(train_path, test_path, sub_data=sub_data), \
                                                     model_settings.get_entire_dataset(dataset_name, options=options)
     all_data_info = list(all_data_info)
     all_data_info.extend([train_dataset, test_datatset, model_settings.dataset_config(dataset_name, options=options)])

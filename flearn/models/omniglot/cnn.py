@@ -18,8 +18,8 @@ class Model(object):
         """
         # params
         self.num_classes = num_classes
-        self.train_lr = 1e-2
-        self.meta_lr = 1e-3
+        self.train_lr = 1e-3
+        self.meta_lr = 1e-2
         # create computation graph
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -159,12 +159,11 @@ class Model(object):
         # 计算后的梯度保存为 key->variable 字典
         gvs = dict(zip(self.weights.keys(), grads))
 
-        # theta_pi = theta - alpha * grads
-        fast_weights = dict(zip(self.weights.keys(),
-                                [self.weights[key] - self.train_lr * gvs[key] for key in self.weights.keys()]))
-        # theta_pi' 在query set 上运行
+        # theta' = theta - alpha * grads
+        fast_weights = dict(zip(self.weights.keys(), [self.weights[key] - self.train_lr * gvs[key] for key in self.weights.keys()]))
+        # 基于 query 运行一次forward
         query_pred = self.forward(query_x, fast_weights)
-        # meta-test loss
+        # 计算损失函数 L(f_theta'(D'))
         query_loss = tf.nn.softmax_cross_entropy_with_logits(logits=query_pred, labels=query_y)
         # record T0 pred and loss for meta-test
         query_preds.append(query_pred)
@@ -173,7 +172,7 @@ class Model(object):
         # continue to build T1-TK steps graph
         for _ in range(1, K):
             # 这里的总体步骤同上, 先计算 fast_weight, 再利用 query set 来学习
-            # we need meta-train loss to fine-tune the task and meta-test loss to update theta
+            # 基于 support 集合进行 fine-tuning
             loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.forward(support_x, fast_weights),
                                                            labels=support_y)
             # compute gradients
@@ -261,7 +260,8 @@ class Model(object):
         #         tf.summary.scalar('train/query_loss_step ' + str(j + 1), self.query_losses[j])
         #         tf.summary.scalar('train/query_acc_step ' + str(j + 1), self.query_accs[j])
         # meta-train optim
-        optimizer = tf.train.AdamOptimizer(self.meta_lr, name='meta_optim')
+        # optimizer = tf.train.AdamOptimizer(self.meta_lr, name='meta_optim')
+        optimizer = tf.train.GradientDescentOptimizer(self.meta_lr, name='meta_optim')
         # meta-train gradients, query_losses[-1] is the accumulated loss across over tasks.
         gvs = optimizer.compute_gradients(self.query_losses[-1])
         # meta-train grads clipping

@@ -4,6 +4,7 @@ from torchmeta.modules import (MetaModule, MetaSequential, MetaConv2d,
 
 
 def conv3x3(in_channels, out_channels, **kwargs):
+
     return MetaSequential(
         MetaConv2d(in_channels, out_channels, kernel_size=3, padding=1, **kwargs),
         MetaBatchNorm2d(out_channels, momentum=1., track_running_stats=False),
@@ -11,7 +12,9 @@ def conv3x3(in_channels, out_channels, **kwargs):
         nn.MaxPool2d(2)
     )
 
+
 class ConvolutionalNeuralNetwork(MetaModule):
+
     def __init__(self, in_channels, out_features, hidden_size=64):
         super(ConvolutionalNeuralNetwork, self).__init__()
         self.in_channels = in_channels

@@ -1,7 +1,7 @@
 # GLOBAL PARAMETERS
 import argparse
-DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018']
-TRAINERS = {'fedavg': 'FedAvg', 'fedprox': 'FedProx', 'fedprox_non_grad': 'FedProxNonGrad', 'fedavg_schemes': 'FedAvgSchemes', 'q_maml': 'MAML'}
+DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018', 'omniglot']
+TRAINERS = {'fedavg': 'FedAvg', 'fedprox': 'FedProx', 'fedprox_non_grad': 'FedProxNonGrad', 'fedavg_schemes': 'FedAvgSchemes', 'maml': 'MAML'}
 OPTIMIZERS = TRAINERS.keys()
 
 
@@ -34,6 +34,8 @@ class ModelConfig(object):
         elif dataset == 'brats2018':
             brats2018 = {'unet': {'num_classes': 1, 'input_shape': [1, 128, 128], 'num_channels': 1, 'bilinear': True}}
             return brats2018[model]
+        elif dataset == 'omniglot':
+            return {'input_shape': (1, 28, 28)}
         else:
             raise ValueError('Not support dataset {}!'.format(dataset))
 
@@ -52,7 +54,7 @@ class ModelConfig(object):
             #     return get_dataset(flatten_input=True)
             # else:
             #     return get_dataset(flatten_input=False)
-        elif dataset in ['synthetic', 'shakespeare', 'brats2018']:
+        elif dataset in ['synthetic', 'shakespeare', 'brats2018', 'omniglot']:
             return None, None
         else:
             raise ValueError('Not support dataset {}!'.format(dataset))
@@ -154,6 +156,6 @@ def add_dynamic_options(argparser):
     # 获取对应的 solver 的名称
     params = argparser.parse_known_args()[0]
     algo = params.algo
-    if algo in ['q_maml', 'q_fedavg', 'q_fedsgd']:
-        argparser.add_argument('--q_coef', help='q', type=float, default=0.0)
+    # if algo in ['maml']:
+    #     argparser.add_argument('--q_coef', help='q', type=float, default=0.0)
     return argparser

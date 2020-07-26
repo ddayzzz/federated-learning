@@ -102,8 +102,10 @@ class Server(BaseFedarated):
         query_data_num = []
         # 仅仅在 meta-test 的设备中运行
         for c in self.clients[self.held_out_for_train:]:
+            # 没运行一次需要设置一次参数
             if sync_params:
                 self.client_model.set_params(self.latest_model)
+            #
             support_data, query_data = c.train_data, c.eval_data
             # support 都是一维, query的结果 等都是更新次数的维度
             support_loss, support_correct, query_losses, query_correct = c.model.test(support_data, query_data)
@@ -165,11 +167,13 @@ class Server(BaseFedarated):
                 # 使用 mini-batch
                 support_bacth = next(train_batches[c.id])
                 query_batch = next(test_batches[c.id])
-                params, comp, num_samples, (support_loss, support_acc, query_losses, query_accs) = c.model.solve_gd_mini_batch(support_bacth, query_batch)
+                params, comp, num_samples, (support_loss, support_cnt, query_losses, query_cnt) = c.model.solve_gd_mini_batch(support_bacth, query_batch)
                 # 使用 full-batch 的梯度下降
                 # params, comp, num_samples, (support_loss, support_cnt, query_losses, query_cnt) = c.model.solve_gd(c.train_data, c.eval_data)
                 #
-                # print('Support loss:', support_loss, 'acc:', support_cnt / c.num_train_samples)
+                if (i + 1) % self.eval_every_round == 0:
+                    print('Client', c.id, 'Support loss:', support_loss, 'acc:', support_cnt / len(support_bacth[1]))
+                    print('Client', c.id, 'Query loss:', query_losses, 'acc:', query_cnt / len(query_batch[1]))
                 wsolns.append(params)
                 samples.append(num_samples)
 
@@ -200,6 +204,6 @@ class Server(BaseFedarated):
         # print("personalized mean: ", np.mean(np.asarray(test_accuracies)))
         # print("personalized variance: ", np.var(np.asarray(test_accuracies)))
         # np.savetxt(self.output+"_"+"test.csv", np.asarray(test_accuracies), delimiter=",")
-        self.metrics.write()
+        # self.metrics.write()
 
 

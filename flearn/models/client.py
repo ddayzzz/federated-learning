@@ -46,7 +46,7 @@ class Client(object):
         grads, loss, weights = self.model.solve_sgd(mini_batch_data)
         return grads, loss, weights
 
-    def solve_inner(self, round_i, num_epochs=1, batch_size=10):
+    def solve_inner(self, round_i, num_epochs=1, batch_size=10, hide_output=False):
         '''Solves local optimization problem
         
         Return:
@@ -58,7 +58,7 @@ class Client(object):
         '''
 
         bytes_w = self.model.size
-        soln, comp = self.model.solve_inner(data=self.train_data, client_id=self.id, round_i=round_i, num_epochs=num_epochs, batch_size=batch_size)
+        soln, comp = self.model.solve_inner(data=self.train_data, client_id=self.id, round_i=round_i, num_epochs=num_epochs, batch_size=batch_size, hide_output=hide_output)
         bytes_r = self.model.size
         stats = {'id': self.id, 'bytes_w': bytes_w, 'bytes_r': bytes_r, 'comp': comp}
         return (self.num_train_samples, soln), stats

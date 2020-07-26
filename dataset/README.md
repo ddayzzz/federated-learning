@@ -13,6 +13,9 @@ synthetic|生成式数据集|2
 2. `train`和`test`目录中保存的是对应客户端的拥有的数据, 这些数据已经经过处理, 可以作为模型的输入数据
 3. `train`和`test`目录中保存的是对应客户端的拥有的数据, 这些数据已经经过处理, 但不可以作为模型的输入数据, 需要对应的类进行转换.
 
+## LEAF 格式数据集
+LEAF 数据集如果在预处理阶段使用参数 `-t sample` 则会将保存在 `all_data` 数据切分为 train 和 test. 格式为 JSON, 这些 JSON 保存对应客户端端拥有的数据
+
 # 参考
 - [关于 Shakespeare 数据集](https://github.com/litian96/FedProx/tree/master/data/shakespeare)
 - [关于 Synthetic 数据集](https://github.com/lx10077/fedavgpy)

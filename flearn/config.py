@@ -1,6 +1,6 @@
 # tensorflow 版本的配置文件
 import argparse
-DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018', 'nist', 'sent140', 'omniglot']
+DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018', 'nist', 'sent140', 'omniglot', 'femnist']
 TRAINERS_TONAMES = {'fedavg': 'Server', 'fedprox': 'Server', 'feddane': 'Server', 'maml': 'Server'}
 TRAINERS = TRAINERS_TONAMES.keys()
 # 模型的参数, 这里的模型都不可复用故而直接写死
@@ -15,6 +15,7 @@ MODEL_PARAMS = {
     'shakespeare.stacked_lstm': (80, 80, 256), # seq_len, emb_dim, num_hidden
     'synthetic.mclr': (10, ),  # num_classes
     'omniglot.cnn': (5, ),  # num_classes
+    'femnist.cnn': (62, 28),  # num_classes, image_size
 }
 
 def base_options():
@@ -74,13 +75,28 @@ def base_options():
                         type=int,
                         default=0)
     parser.add_argument('--quiet',
-                        help='hide output; only show eval results',
-                        type=int,
-                        default=0)
+                        help='hide client\'s output; only show eval results',
+                        action='store_true')
+    parser.add_argument('--result_prefix',
+                        help='保存结果的前缀路径',
+                        type=str,
+                        default='./result')
     parser.add_argument('--drop_rate',
                         help='number of epochs when clients train on data;',
                         type=float,
                         default=0.0)
+    parser.add_argument('--train_val_test',
+                        help='数据集是否以训练集、验证集和测试集的方式存在',
+                        action='store_true')
+    parser.add_argument('--result_dir',
+                        help='指定已经保存结果目录, 可以加载相关的 checkpoints',
+                        type=str,
+                        default='')
+    # TODO 以后支持 之家加载 leaf 目录里的数据
+    parser.add_argument('--data_format',
+                        help='加载的数据格式, json 为 Leaf以及Li T.等人定义的格式, 默认为 pkl',
+                        type=str,
+                        default='pkl')
     # FedAvg Scheme
     parser.add_argument('--scheme',
                         help='Scheme 1;Scheme 2;Transformed scheme 2',
@@ -88,6 +104,14 @@ def base_options():
                         default='')
     return parser
 
+
+def get_eval_options():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--result_dir',
+                        help='指定已经保存结果目录, 可以加载相关的 checkpoints',
+                        type=str,
+                        default='')
+    return parser.parse_args()
 
 def add_dynamic_options(argparser):
     # 获取对应的 solver 的名称

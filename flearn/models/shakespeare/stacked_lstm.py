@@ -5,6 +5,7 @@ from tensorflow.contrib import rnn
 from flearn.utils.tf_utils import graph_size, process_sparse_grad
 from flearn.utils.language_utils import letter_to_vec, word_to_indices
 from flearn.utils.model_utils import batch_data, batch_data_multiple_iters
+from flearn.models.base_model import BaseModel
 
 
 def process_x(raw_x_batch):
@@ -23,31 +24,32 @@ def process_y(raw_y_batch):
     return y_batch
 
 
-class Model(object):
+class Model(BaseModel):
     def __init__(self, seq_len, num_classes, n_hidden, optimizer, seed):
         self.seq_len = seq_len
         self.num_classes = num_classes
         self.n_hidden = n_hidden
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
+        # config = tf.ConfigProto()
+        # config.gpu_options.allow_growth = True
         # config.gpu_options.per_process_gpu_memory_fraction = 0.5
-        self.graph = tf.Graph()
-        with self.graph.as_default():
-            tf.set_random_seed(123 + seed)
-            self.features, self.labels, self.train_op, self.grads, self.eval_metric_ops, self.loss = self.create_model(optimizer)
-            self.saver = tf.train.Saver()
-        self.sess = tf.Session(graph=self.graph, config=config)
+        # self.graph = tf.Graph()
+        # with self.graph.as_default():
+        #     tf.set_random_seed(123 + seed)
+        #     self.features, self.labels, self.train_op, self.grads, self.eval_metric_ops, self.loss = self.create_model(optimizer)
+        #     self.saver = tf.train.Saver()
+        # self.sess = tf.Session(graph=self.graph, config=config)
+        #
+        # self.size = graph_size(self.graph)
+        #
+        # with self.graph.as_default():
+        #     self.sess.run(tf.global_variables_initializer())
+        #
+        #     metadata = tf.RunMetadata()
+        #     opts = tf.profiler.ProfileOptionBuilder.float_operation()
+        #     self.flops = tf.profiler.profile(self.graph, run_meta=metadata, cmd='scope', options=opts).total_float_ops
+        super(Model, self).__init__(optimizer=optimizer, seed=seed)
 
-        self.size = graph_size(self.graph)
-
-        with self.graph.as_default():
-            self.sess.run(tf.global_variables_initializer())
-
-            metadata = tf.RunMetadata()
-            opts = tf.profiler.ProfileOptionBuilder.float_operation()
-            self.flops = tf.profiler.profile(self.graph, run_meta=metadata, cmd='scope', options=opts).total_float_ops
-
-    def create_model(self, optimizer):
+    def create_model(self):
         features = tf.placeholder(tf.int32, [None, self.seq_len])
         embedding = tf.get_variable("embedding", [self.num_classes, 8])
         x = tf.nn.embedding_lookup(embedding, features)
@@ -60,28 +62,15 @@ class Model(object):
         
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=pred, labels=labels))
 
-        grads_and_vars = optimizer.compute_gradients(loss)
+        grads_and_vars = self.optimizer.compute_gradients(loss)
         grads, _ = zip(*grads_and_vars)
-        train_op = optimizer.apply_gradients(grads_and_vars, global_step=tf.train.get_global_step())
+        train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=tf.train.get_global_step())
 
 
         correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(labels, 1))
         eval_metric_ops = tf.count_nonzero(correct_pred)
 
         return features, labels, train_op, grads, eval_metric_ops, loss
-
-
-    def set_params(self, model_params=None):
-        if model_params is not None:
-            with self.graph.as_default():
-                all_vars = tf.trainable_variables()
-                for variable, value in zip(all_vars, model_params):
-                    variable.load(value, self.sess)
-
-    def get_params(self):
-        with self.graph.as_default():
-            model_params = self.sess.run(tf.trainable_variables())
-        return model_params
 
     def get_gradients(self, data, model_len):
         """
@@ -92,7 +81,6 @@ class Model(object):
         """
         grads = np.zeros(model_len)
         num_samples = len(data['y'])
-
         processed_samples = 0
 
         if num_samples < 50:
@@ -201,7 +189,3 @@ class Model(object):
             # loss -> 这个batch 的损失
             tot_loss += loss * num_sample
         return tot_correct, (tot_loss / num_samples)
-    
-    def close(self):
-        self.sess.close()
-

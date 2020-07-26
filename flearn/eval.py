@@ -3,17 +3,23 @@ import importlib
 import tensorflow as tf
 import os
 import random
+import json
 # 复用读取数据的 api
 from dataset.data_reader import read_data
 from flearn.config import DATASETS, TRAINERS_TONAMES, MODEL_PARAMS
-from flearn.config import base_options, add_dynamic_options
+from flearn.config import get_eval_options
 
 
 def read_options():
-    parser = base_options()
-    parser = add_dynamic_options(parser)
-    parsed = parser.parse_args()
+    parsed = get_eval_options()
     options = parsed.__dict__
+    # 必须存在 result_prefix
+    assert os.path.exists(options['result_dir']) and os.path.isdir(options['result_dir']), '评估模式必须存在存有训练的输出文件'
+    # 加载训练时候的参数
+    with open(os.path.join(options['result_dir'], 'params.json')) as fp:
+        params_dict = json.load(fp)
+    del params_dict['result_dir']  # 去掉 '', 因为原则上是不修改 options 的内容的
+    options.update(params_dict)
     # 设置种子
     os.environ['PYTHONHASHSEED'] = str(options['seed'])
     np.random.seed(1 + options['seed'])
@@ -46,7 +52,7 @@ def read_options():
     # 打印参数
     max_length = max([len(key) for key in options.keys()])
     fmt_string = '\t%' + str(max_length) + 's : %s'
-    print('>>> 参数:')
+    print('>>> 训练时所用的参数:')
     for keyPair in sorted(options.items()):
         print(fmt_string % keyPair)
 
@@ -67,7 +73,7 @@ def main():
     all_data_info = read_data(train_path, test_path, sub_data=sub_data, data_format=options['data_format'])
     # 调用solver
     trainer = trainer_class(params=options, learner=learner, dataset=all_data_info)
-    trainer.train()
+    trainer.eval()
 
 
 if __name__ == '__main__':
