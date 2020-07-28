@@ -4,7 +4,7 @@ import json
 from collections import defaultdict
 
 
-__all__ = ['read_data', ]
+__all__ = ['read_data', 'get_distributed_data_cfgs']
 
 
 def _read_data_pkl(train_data_dir, test_data_dir, sub_data=None):
@@ -80,6 +80,13 @@ def _read_dir_leaf(data_dir):
 
     clients = list(sorted(data.keys()))
     return clients, groups, data
+
+
+def get_distributed_data_cfgs(data_name, sub_name, client_id):
+    root = os.path.dirname(os.path.realpath(__file__))
+    cfgs = os.path.join(root, data_name, 'data', 'distributed', sub_name)
+    # all_cfgs = os.listdir(cfgs)
+    return os.path.join(cfgs, client_id + '.json')
 
 
 def read_data(train_data_dir, test_data_dir, data_format, sub_data=None):

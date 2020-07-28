@@ -1,7 +1,7 @@
 # tensorflow 版本的配置文件
 import argparse
 DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018', 'nist', 'sent140', 'omniglot', 'femnist']
-TRAINERS_TONAMES = {'fedavg': 'Server', 'fedprox': 'Server', 'feddane': 'Server', 'maml': 'Server'}
+TRAINERS_TONAMES = {'fedavg': 'Server', 'fedprox': 'Server', 'feddane': 'Server', 'maml': 'Server', 'fedmeta': 'FedMetaBaseServer'}
 TRAINERS = TRAINERS_TONAMES.keys()
 # 模型的参数, 这里的模型都不可复用故而直接写死
 MODEL_PARAMS = {
@@ -119,6 +119,9 @@ def add_dynamic_options(argparser):
     algo = params.algo
     if algo in ['maml']:
         argparser.add_argument('--num_fine_tune', help='number of fine-tune', type=int, default=0)
+    elif algo in ['fedmeta']:
+        argparser.add_argument('--meta_algo', help='使用的元学习算法, 默认 maml', type=str, default='maml', choices=['maml', 'reptile', 'meta_sgd'])
+        argparser.add_argument('--outer_lr', help='更新元学习中的外部学习率', type=float, required=True)
     elif algo in ['fedprox']:
         argparser.add_argument('--mu',
                             help='mu',

@@ -141,7 +141,7 @@ def base_options():
                         type=int,
                         default=0)
     parser.add_argument('--quiet',
-                        help='hide output; only show eval results',
+                        help='仅仅显示结果的代码',
                         type=int,
                         default=0)
     # FedAvg Scheme

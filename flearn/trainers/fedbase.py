@@ -60,7 +60,7 @@ class BaseFedarated(object):
                 print(">>> Checkpoint loaded:", checkpoint.model_checkpoint_path)
                 last = checkpoint.model_checkpoint_path.find('.ckpt')
                 start = checkpoint.model_checkpoint_path.rfind('round_')
-                self.start_epoch = int(checkpoint.model_checkpoint_path[start + 6:last])
+                self.start_round = int(checkpoint.model_checkpoint_path[start + 6:last])
                 print(">>> Resume from round: ", self.start_epoch)
 
         self.latest_model = self.client_model.get_params()  # 永远是最新的模型

@@ -44,7 +44,7 @@ class Client(object):
         :return: grads, loss, weights
         """
         grads, loss, weights = self.model.solve_sgd(mini_batch_data)
-        return grads, loss, weights
+        return grads, loss, weights, comp
 
     def solve_inner(self, round_i, num_epochs=1, batch_size=10, hide_output=False):
         '''Solves local optimization problem

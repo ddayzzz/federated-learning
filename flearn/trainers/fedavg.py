@@ -15,7 +15,7 @@ class Server(BaseFedarated):
         '''Train using Federated Proximal'''
         print('Training with {} workers ---'.format(self.clients_per_round))
 
-        for i in range(self.start_epoch, self.num_rounds, step=1):
+        for i in range(self.start_round, self.num_rounds):
             # test model
             if (i + 1) % self.eval_every_round == 0:
                 stats = self.local_test_only_acc(round_i=i, on_train=False, sync_params=True)  # have set the latest model for all clients

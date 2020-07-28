@@ -107,9 +107,10 @@ class BaseModel(abc.ABC):
             grads, loss, _ = self.sess.run([self.grads, self.loss, self.train_op],
                                            feed_dict={self.features: mini_batch_data[0],
                                                       self.labels: mini_batch_data[1]})
-
+        grads = process_grad(grads)  # 扁平化, 方便处理
+        comp = len(mini_batch_data[1]) * self.flops
         weights = self.get_params()
-        return grads, loss, weights
+        return grads, loss, weights, comp
 
     def test(self, data):
         """
