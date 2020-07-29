@@ -151,7 +151,6 @@ class FederatedClient(WebSocketClient):
 
     def on_stop_and_eval(self, *args):
         req = args[0]
-        weights = req['current_weight']  # BytesIO
         # 加载对应的权重
         self.datamodel.worker.set_model_params(req['current_weight'])
         # 接着进行验证和测试

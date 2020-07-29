@@ -1,0 +1,7 @@
+hausdorff
+tornado
+tqdm
+torch
+torchvision
+numpy
+numba

@@ -17,11 +17,15 @@ def parse_args():
     parser.add_argument('--client_name', type=str, required=True)
     parser.add_argument('--server', type=str, required=True)
     parser.add_argument('--model', help='name of model;', type=str, default='mclr')
-    parser.add_argument('--lr', help='learning rate for inner solver;', type=float, default=0.01)
+    parser.add_argument('--lr', help='learning rate for inner solver;', type=float, default=3e-4)
     parser.add_argument('--seed', help='seed for randomness;', type=int, default=0)
     parser.add_argument('--device', type=str, default='cpu:0')
-    parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'sgd', 'rmsprop'])
     parser.add_argument('--quiet', action='store_true')
+    parser.add_argument('--optimizer', type=str, default='rmsprop', choices=['adam', 'sgd', 'rmsprop'])
+    parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--momentum', type=float, default=0.9)
+    parser.add_argument('--nesterov', action='store_true', default=False)
+
     return parser.parse_args()
 
 
@@ -50,10 +54,11 @@ def get_worker_wrapper(dataset_name, model, options):
 
 def get_optimizer(optimizer, model, options):
     if optimizer == 'adam':
-        opt = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=options['lr'])
+        opt = optim.Adam(model.parameters(), lr=options['lr'], weight_decay=options['weight_decay'])
     elif optimizer == 'sgd':
-        opt = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=options['lr'],
-                              momentum=options['momentum'], weight_decay=options['weight_decay'], nesterov=options['nesterov'])
+        opt = optim.SGD(model.parameters(), lr=options['lr'], momentum=options['momentum'], weight_decay=options['weight_decay'], nesterov=options['nesterov'])
+    elif optimizer == 'rmsprop':
+        opt = optim.RMSprop(model.parameters(), lr=options['lr'], momentum=options['momentum'], weight_decay=options['weight_decay'])
     else:
         raise NotImplementedError
     return opt

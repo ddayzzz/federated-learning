@@ -101,17 +101,18 @@ class MainHandler(tornado.websocket.WebSocketHandler):
             trainer_server.received_train_stats_from_client_this_round.append(data)
 
             # 如果当前的缓冲区达到了最低训练的客户端的数量, 就进行聚合
-            assert trainer_server.min_train_client == trainer_server.num_clients_per_round, '目前保持一致'
             if len(trainer_server.received_train_stats_from_client_this_round) >= trainer_server.min_train_client:
                 # 相关的数据保存到了 received_train_stats_from_client_this_round
                 # 聚合相关的参数
                 trainer_server.aggregate()
                 # 输出训练和测试的结果
                 info = trainer_server.compute_train_stats()
-                info.to_csv('round_at_{}.csv'.format(trainer_server.current_round))
-                trainer_server.log_metrics(df=info)
+                trainer_server.log_metrics(df=info, save_to_file=True)
+
                 # 写入上一次运行的 loss, 以确保收敛
                 # trainer_server.global_model.prev_train_loss = aggr_train_loss
+                if trainer_server.current_round % trainer_server.save_every == 0:
+                    trainer_server.save_weights_to_file()
 
                 if trainer_server.current_round >= trainer_server.num_rounds:
                     self.stop_and_eval()
@@ -141,12 +142,16 @@ class MainHandler(tornado.websocket.WebSocketHandler):
         """
         assert isinstance(trainer_server, ServerHelper)
         trainer_server.current_round += 1
+        np.random.seed(trainer_server.current_round)
         # buffers all client updates
         trainer_server.received_train_stats_from_client_this_round = []
 
         print("### Round ", trainer_server.current_round, "###")
+        # 确定选择的范围
         client_num = min(trainer_server.num_clients_per_round, trainer_server.min_train_client)
-        client_sids_selected = random.sample(list(trainer_server.online_clients), client_num)
+
+        # client_sids_selected = random.sample(list(trainer_server.online_clients), client_num)
+        client_sids_selected = np.random.choice(list(trainer_server.online_clients), size=client_num, replace=False)
         print("request updates from", client_sids_selected)
 
         weights = trainer_server.dump_weights()

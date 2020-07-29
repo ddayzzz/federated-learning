@@ -1,72 +1,17 @@
 # ref: https://github.com/Merofine/UNet2D_BraTs/blob/master/metrics.py
 import numpy as np
-
+from hausdorff import hausdorff_distance
 import torch
 import torch.nn.functional as F
 
 
-def mean_iou(y_true_in, y_pred_in, print_table=False):
-    if True: #not np.sum(y_true_in.flatten()) == 0:
-        labels = y_true_in
-        y_pred = y_pred_in
-
-        true_objects = 2
-        pred_objects = 2
-
-        intersection = np.histogram2d(labels.flatten(), y_pred.flatten(), bins=(true_objects, pred_objects))[0]
-
-        # Compute areas (needed for finding the union between all objects)
-        area_true = np.histogram(labels, bins = true_objects)[0]
-        area_pred = np.histogram(y_pred, bins = pred_objects)[0]
-        area_true = np.expand_dims(area_true, -1)
-        area_pred = np.expand_dims(area_pred, 0)
-
-        # Compute union
-        union = area_true + area_pred - intersection
-
-        # Exclude background from the analysis
-        intersection = intersection[1:,1:]
-        union = union[1:,1:]
-        union[union == 0] = 1e-9
-
-        # Compute the intersection over union
-        iou = intersection / union
-
-        # Precision helper function
-        def precision_at(threshold, iou):
-            matches = iou > threshold
-            true_positives = np.sum(matches, axis=1) == 1   # Correct objects
-            false_positives = np.sum(matches, axis=0) == 0  # Missed objects
-            false_negatives = np.sum(matches, axis=1) == 0  # Extra objects
-            tp, fp, fn = np.sum(true_positives), np.sum(false_positives), np.sum(false_negatives)
-            return tp, fp, fn
-
-        # Loop over IoU thresholds
-        prec = []
-        if print_table:
-            print("Thresh\tTP\tFP\tFN\tPrec.")
-        for t in np.arange(0.5, 1.0, 0.05):
-            tp, fp, fn = precision_at(t, iou)
-            if (tp + fp + fn) > 0:
-                p = tp / (tp + fp + fn)
-            else:
-                p = 0
-            if print_table:
-                print("{:1.3f}\t{}\t{}\t{}\t{:1.3f}".format(t, tp, fp, fn, p))
-            prec.append(p)
-
-        if print_table:
-            print("AP\t-\t-\t-\t{:1.3f}".format(np.mean(prec)))
-        return np.mean(prec)
-
-    else:
-        if np.sum(y_pred_in.flatten()) == 0:
-            return 1
-        else:
-            return 0
-
-
 def batch_iou(output, target):
+    """
+    batch 版本的 IOU
+    :param output: 网络的输出
+    :param target:
+    :return:
+    """
     output = torch.sigmoid(output).data.cpu().numpy() > 0.5
     target = (target.data.cpu().numpy() > 0.5).astype('int')
     output = output[:,0,:,:]
@@ -111,15 +56,18 @@ def iou_score(output, target):
     return (intersection + smooth) / (union + smooth)
 
 
-def dice_coef(output, target):
-    smooth = 1e-5
-
+def dice_coef(output, target, smooth=1e-5):
+    """
+    Dice 系数
+    :param output: 任何一种形式, 返回的都是累加值. 如果是 torch.Tensor 则进行 sigmoid 激活
+    :param target: 同 output 的格式
+    :param smooth:
+    :return: 标量, 输出整体的累加和
+    """
     if torch.is_tensor(output):
         output = torch.sigmoid(output).data.cpu().numpy()
     if torch.is_tensor(target):
         target = target.data.cpu().numpy()
-    #output = torch.sigmoid(output).view(-1).data.cpu().numpy()
-    #target = target.view(-1).data.cpu().numpy()
 
     intersection = (output * target).sum()
 
@@ -136,6 +84,7 @@ def accuracy(output, target):
 
     return (output == target).sum() / len(output)
 
+
 def ppv(output, target):
     smooth = 1e-5
     if torch.is_tensor(output):
@@ -145,6 +94,7 @@ def ppv(output, target):
     intersection = (output * target).sum()
     return  (intersection + smooth) / \
            (output.sum() + smooth)
+
 
 def sensitivity(output, target):
     smooth = 1e-5
@@ -160,4 +110,67 @@ def sensitivity(output, target):
         (target.sum() + smooth)
 
 
-# 添加 channel_wise 版本的
+# TODO 计算的结果不对
+def dice_coef_channel_wise(output, target):
+    """
+    按照 channel 的维度输出 dice coef. 这里的全部是没有经过平均的数值.
+    :param output: [N, C, H, W]. 网络的输出
+    :param target:
+    :param wise:
+    :return: [C], 在 batch 的维度上平均一下
+    """
+    # TODO 这种形式有bug, 不知道怎么回事
+    n, c, h, w = output.shape
+    out = np.zeros([c])
+    for channel in range(c):
+        dc_sum = 0.0
+        for batch in range(n):
+            dc_sum += dice_coef(output[batch, channel, :, :], target[batch, channel, :, :])
+        output[channel] = dc_sum
+    return out
+
+
+def sensitivity_channel_wise(output, target):
+    outputs = []
+    # 一般 C 代表 GT 的维度
+    for i in range(output.shape[1]):
+        one_batch = []
+        for b in range(output.shape[0]):
+            hd = sensitivity(output[b, i, :, :], target[b, i, :, :])
+            one_batch.append(hd)  # 标量
+        outputs.append(sum(one_batch))
+    d = np.stack(outputs)  # 向量
+    return d
+
+
+def hausdorff_distance_channel_wise(output, target):
+    outputs = []
+    # 一般 C 代表 GT 的维度
+    for i in range(output.shape[1]):
+        one_batch = []
+        for b in range(output.shape[0]):
+            hd = hausdorff_distance(output[b, i, :, :], target[b, i, :, :])
+            one_batch.append(hd)  # 标量
+        outputs.append(sum(one_batch))
+    d = np.stack(outputs)  # 向量
+    return d
+
+
+def ppv_channel_wise(output, target):
+    outputs = []
+    # 一般 C 代表 GT 的维度
+    for i in range(output.shape[1]):
+        one_batch = []
+        for b in range(output.shape[0]):
+            hd = ppv(output[b, i, :, :], target[b, i, :, :])
+            one_batch.append(hd)  # 标量
+        outputs.append(sum(one_batch))
+    d = np.stack(outputs)  # 向量
+    return d
+
+
+if __name__ == '__main__':
+    a = np.ones([10, 3, 20, 20])
+    b = np.zeros([10, 3, 20, 20])
+    dc = dice_coef(a, b)
+    print(dc)

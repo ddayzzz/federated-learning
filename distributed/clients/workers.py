@@ -3,10 +3,9 @@ import torch
 import pickle
 import codecs
 import tqdm
+import numpy as np
 from flmod.utils.flops_counter import get_model_complexity_info
 from flmod.utils.torch_utils import get_flat_params_from, set_flat_params_to, get_flat_grad, model_parameters_shape_list, from_flatten_to_parameter
-
-from distributed.models.losses import dice_coeff
 
 
 class BaseWorker(abc.ABC):
@@ -69,6 +68,9 @@ class BaseWorker(abc.ABC):
 
     def to_model_params(self, flat_params):
         return from_flatten_to_parameter(self.model_shape_info, flat_params)
+
+    def get_lr(self):
+        return self.optimizer.param_groups[0]['lr']
 
     @abc.abstractmethod
     def local_train(self, num_epochs, data_loader, round_i):
@@ -171,10 +173,17 @@ class ClassificationWorker(BaseWorker):
         return stats
 
 
+from distributed.models.metrics import ppv, dice_coef, hausdorff_distance, iou_score, sensitivity
+from torch import optim
+
+
 class MRISegWorker(BaseWorker):
 
     def __init__(self, model, criterion, optimizer, options):
         super(MRISegWorker, self).__init__(model, criterion, optimizer, options)
+        # 添加 lr 调节器. https://pytorch.org/docs/stable/optim.html#torch.optim.lr_scheduler.ReduceLROnPlateau
+        # 这里改为 min 模式, 如果当前的 loss 停止减少, 那么适当减少 lr. new_lr = lr * factor
+        self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', patience=2, factor=0.8)
 
     def local_train(self, num_epochs, data_loader, round_i):
         """
@@ -212,7 +221,8 @@ class MRISegWorker(BaseWorker):
             comp = num_epochs * train_total * self.flops
             return_dict = {"comp": comp,
                            "bce_dice_loss": train_loss / train_total,
-                           "num_samples": train_total}
+                           "num_samples": train_total,
+                           "lr": self.get_lr()}
             return local_solution, return_dict
 
     def local_test(self, data_loader):
@@ -225,25 +235,53 @@ class MRISegWorker(BaseWorker):
         n_val = len(data_loader)
         test_total = 0
         bce_dice_loss = 0.0
-        dice_coeff_sum = 0.0
+        # 分割的评价指标
+        dice_coeff_sum = np.zeros([3])
+        hd95_sum = np.zeros([3])
+        ppv_sum = np.zeros([3])
+        sensitivity_sum = np.zeros([3])
+        iou_sum = np.zeros([3])
         for x, y in data_loader:
             # print("test")
             # from IPython import embed
             # embed()
-            x, y = x.to(self.device), y.to(self.device)
+            x, y_to_device = x.to(self.device), y.to(self.device)
 
             with torch.no_grad():
                 pred = self.model(x)
-            bce_dice_loss += self.criterion(pred, y).item()
+            # loss
+            bce_dice_loss += self.criterion(pred, y_to_device).item()
+            # 其他的度量指标, mask 为 0-1的图像, 对应的区域为1, pred 激活且 >1
+            pred_for_metric = (torch.sigmoid(pred).data > 0.5).float().cpu().numpy()
+            y_np = y.numpy()
+            # 这些值是sum, 且会自动使用
+            # dc = dice_coef_channel_wise(pred_for_metric, y_np)
+            # hd_95 = hausdorff_distance_channel_wise(pred_for_metric, y_np)
+            # ppv = ppv_channel_wise(pred_for_metric, y_np)
+            # sensitivity = sensitivity_channel_wise(pred_for_metric, y_np)
             # 计算 Dice系数
-            pred = torch.sigmoid(pred)
-            pred = (pred > 0.5).float()
-            dice_coeff_sum += dice_coeff(pred, y).item()  # dice_coeff 是在batch上平均过的
+            # pred = torch.sigmoid(pred)
+            # pred = (pred > 0.5).float()
+            # dice_coeff_sum += dice_coeff(pred, y).item()  # dice_coeff 是在batch上平均过的
+            # 这些是在 batch 的 sum
+            for one_pred, one_mask in zip(pred_for_metric, y_np):
+                for c, (one_channel_pred, one_channel_mask) in enumerate(zip(one_pred, one_mask)):
+                    hd95_sum[c] += hausdorff_distance(one_channel_pred, one_channel_mask)
+                    dice_coeff_sum[c] += dice_coef(one_channel_pred, one_channel_mask)
+                    ppv_sum[c] += ppv(one_channel_pred, one_channel_mask)
+                    iou_sum[c] += iou_score(one_channel_pred, one_channel_mask)
+                    sensitivity_sum[c] += sensitivity(one_channel_pred, one_channel_mask)
             test_total += y.size(0)
-
+        mean_bce_loss = bce_dice_loss / n_val
         stats = {
             'num_samples': test_total,
-            'dice_coefficient': dice_coeff_sum / n_val,
-            'bce_dice_loss': bce_dice_loss / n_val
+            'bce_dice_loss': mean_bce_loss,
         }
+        for item, item_name in zip([dice_coeff_sum, hd95_sum, ppv_sum, sensitivity_sum, iou_sum],
+                                   ['dice_coeff', 'hd95', 'ppv', 'sensitivity', 'iou_score']):
+            for c in range(len(item)):
+                # 这些是元素数量的求和, 没有像 loss 一样 mean 过
+                stats[item_name + '_channel' + str(c)] = item[c] / test_total
+        # 如果没有验证集的话就不管了
+        self.lr_scheduler.step(mean_bce_loss)
         return stats
