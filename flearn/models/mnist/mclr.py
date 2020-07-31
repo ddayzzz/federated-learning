@@ -13,10 +13,10 @@ class Model(BaseModel):
     Assumes that images are 28px by 28px
     '''
     
-    def __init__(self, num_classes, optimizer, seed=1):
+    def __init__(self, num_classes, optimizer, options, seed=1):
         # params
         self.num_classes = num_classes
-        super(Model, self).__init__(optimizer=optimizer, seed=seed)
+        super(Model, self).__init__(optimizer=optimizer, seed=seed, options=options)
     
     def create_model(self):
         """Model function for Logistic Regression."""

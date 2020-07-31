@@ -54,9 +54,9 @@ for u in users:
 
     while ((row_i < len(data)) and (data[row_i][4] == u)):
         row = data[row_i]
-
+        y = 1 if row[0] == "4" else 0
         user_data[u]['x'].append(row[1:])
-        user_data[u]['y'].append(row[0])
+        user_data[u]['y'].append(y)
 
         row_i += 1
 

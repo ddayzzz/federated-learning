@@ -10,11 +10,11 @@ from flearn.models.base_model import BaseModel
 class Model(BaseModel):
 
     
-    def __init__(self, num_classes, optimizer, seed=1):
+    def __init__(self, num_classes, optimizer, options, seed=1):
 
         # params
         self.num_classes = num_classes
-        super(Model, self).__init__(optimizer=optimizer, seed=seed)
+        super(Model, self).__init__(optimizer=optimizer, seed=seed, options=options)
     
     def create_model(self):
         """Model function for Logistic Regression."""

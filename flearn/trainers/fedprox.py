@@ -92,6 +92,6 @@ class Server(BaseFedarated):
 
         # final test model
         stats = self.local_test_only_acc(round_i=self.num_rounds, on_train=False,
-                                         sync_params=False)  # have set the latest model for all clients
+                                         sync_params=True)  # have set the latest model for all clients
         stats_train = self.local_test_only_acc(round_i=self.num_rounds, on_train=True, sync_params=False)
         self.metrics.write()

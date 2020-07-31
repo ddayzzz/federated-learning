@@ -10,8 +10,8 @@ fi
 
 NAME="sent140" # name of the dataset, equivalent to directory name
 
-cd ../../utils
+cd ../utils
 
 ./preprocess.sh --name $NAME $@
 
-cd ../data/$NAME
+cd ../$NAME

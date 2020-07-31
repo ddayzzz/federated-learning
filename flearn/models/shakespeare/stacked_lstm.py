@@ -25,7 +25,7 @@ def process_y(raw_y_batch):
 
 
 class Model(BaseModel):
-    def __init__(self, seq_len, num_classes, n_hidden, optimizer, seed):
+    def __init__(self, seq_len, num_classes, n_hidden, options, optimizer, seed):
         self.seq_len = seq_len
         self.num_classes = num_classes
         self.n_hidden = n_hidden
@@ -47,10 +47,11 @@ class Model(BaseModel):
         #     metadata = tf.RunMetadata()
         #     opts = tf.profiler.ProfileOptionBuilder.float_operation()
         #     self.flops = tf.profiler.profile(self.graph, run_meta=metadata, cmd='scope', options=opts).total_float_ops
-        super(Model, self).__init__(optimizer=optimizer, seed=seed)
+        super(Model, self).__init__(optimizer=optimizer, seed=seed, options=options)
 
     def create_model(self):
         features = tf.placeholder(tf.int32, [None, self.seq_len])
+        # 注意, 这里没有用预训练的词向量, 所以trainble
         embedding = tf.get_variable("embedding", [self.num_classes, 8])
         x = tf.nn.embedding_lookup(embedding, features)
         labels = tf.placeholder(tf.int32, [None, self.num_classes])

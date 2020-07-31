@@ -115,7 +115,46 @@ def split_by_insitiution(data_dir, train_rate, val_rate, train_test_val_no_cross
             print('TRAIN PIDS:', train_ps, 'TEST PID:', test_ps)
 
 
+def split_by_merged_insitiution(splitted_cfgs_dir, subname, merged_list):
+    """
+    按照结构划分数据, 但将机构合并
+    :param packs
+    :return:
+    """
+    split_path = os.path.join(SAVE_DIR, f'merged_' + subname)
+    if not os.path.exists(split_path):
+        os.mkdir(split_path)
+    # merged_list : [[1,2,3],[4,5,6]...]
+    for merged in merged_list:
+        # merged = [1,2,3]
+        name_jsons = []
+        for filenames in merged:
+            with open(os.path.join(splitted_cfgs_dir, filenames + '.json')) as fp:
+                name_jsons.append(json.load(fp))
+        new = dict()
+        # 合并相关
+        for info in name_jsons:
+            # {'train': [], 'test': []}
+            for k, v in info.items():
+                if k not in new:
+                    new[k] = {'image': [], 'mask': []}
+                new[k]['image'].extend(v['image'])
+                new[k]['mask'].extend(v['mask'])
+        #
+        if 'val' in new:
+            print('Train size: ', len(new['train']['mask']), ', test size: ', len(new['test']['mask']), ', val size: ',
+                  len(new['val']['mask']))
+        else:
+            print('Train size: ', len(new['train']['mask']), ', test size: ', len(new['test']['mask']))
+        path = os.path.join(split_path, '_'.join(merged) + '.json')
+        with open(path, 'w') as fp:
+            json.dump(new, fp)
+
 if __name__ == '__main__':
-    data_dir = '/home/liuyuan/shu_codes/pytorch_brats/data/brats2018_train'
-    _generate_data_info(data_dir)
-    split_by_insitiution(data_dir=data_dir, train_rate=0.8, val_rate=0.0, train_test_val_no_cross=True)
+    # data_dir = '/home/liuyuan/shu_codes/pytorch_brats/data/brats2018_train'
+    # _generate_data_info(data_dir)
+    # split_by_insitiution(data_dir=data_dir, train_rate=0.8, val_rate=0.0, train_test_val_no_cross=True)
+    split_by_merged_insitiution('data/distributed/train_80_test_20', '3_ins', [
+        ['CBICA'], ['TCIA13', 'TCIA02', '2013', 'TCIA01'],
+        ['TCIA09', 'TCIA12', 'TCIA10', 'TCIA04', 'TCIA06', 'TCIA03', 'TCIA05']
+    ])

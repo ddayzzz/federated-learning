@@ -36,7 +36,7 @@ class BaseFedarated(object):
         # create worker nodes
         tf.reset_default_graph()
         # 客户端的模型对象
-        self.client_model = learner(*params['model_options'], self.optimizer, self.seed)
+        self.client_model = learner(*params['model_options'], optimizer=self.optimizer, seed=self.seed, options=params)
         self.clients = self.setup_clients(dataset, self.client_model)
         print('{} Clients in Total'.format(len(self.clients)))
 

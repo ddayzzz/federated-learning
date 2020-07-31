@@ -43,7 +43,7 @@ class Client(object):
         :param mini_batch_data: X, y
         :return: grads, loss, weights
         """
-        grads, loss, weights = self.model.solve_sgd(mini_batch_data)
+        grads, loss, weights, comp = self.model.solve_sgd(mini_batch_data)
         return grads, loss, weights, comp
 
     def solve_inner(self, round_i, num_epochs=1, batch_size=10, hide_output=False):

@@ -16,7 +16,7 @@ class FedMetaBaseServer(BaseFedarated):
         if self.meta_algo == 'meta_sgd':
             inner_opt = tf.train.AdamOptimizer(1.0)
         else:
-            inner_opt = tf.train.AdamOptimizer(params['lr'])
+            inner_opt = tf.train.AdamOptimizer(1.0)
         #
         append = f'meta_algo[{self.meta_algo}]_outer_lr{params["outer_lr"]}_finetune{self.num_fine_tune}'
         super(FedMetaBaseServer, self).__init__(params, learner, dataset, optimizer=inner_opt, append2metric=append)
@@ -50,11 +50,11 @@ class FedMetaBaseServer(BaseFedarated):
         self.eval_clients = arryed_cls[ind[train_rate:train_rate + val_rate]]
         self.test_clients = arryed_cls[ind[train_rate + val_rate:]]
         #
-        print('用于训练的客户端数量{}, 用于验证:{}, 用于测试: {}'.format(len(self.train_clients), len(self.eval_clients), len(self.test_clients)))
+        print('用于测试的客户端数量{}, 用于验证:{}, 用于测试: {}'.format(len(self.train_clients), len(self.eval_clients), len(self.test_clients)))
 
     def local_test_only_acc(self, round_i, on_train=False, sync_params=True):
         """
-        基于测试集的客户端. 这
+        基于测试集的客户端
         :param round_i:
         :param on_train:
         :param sync_params:
@@ -68,16 +68,20 @@ class FedMetaBaseServer(BaseFedarated):
             if sync_params:
                 c.set_params(self.latest_model)
             # 是不是需要新运行一遍 query
-            for _ in range(self.num_fine_tune):
-                support_batch = next(self.test_support_batches[c.id])
-                c.solve_sgd(support_batch)
+            # for _ in range(self.num_fine_tune):
+            #     support_batch = next(self.test_support_batches[c.id])
+            #     c.solve_sgd(support_batch)
             # 不需要结果
             # c.model.solve_inner(data=c.train_data, client_id=c.id, round_i=round_i, num_epochs=1, batch_size=self.batch_size, hide_output=True)
             # all_x, all_y = np.concatenate((c.train_data['x'], c.eval_data['x']), axis=0), np.concatenate((c.train_data['y'], c.eval_data['y']), axis=0)
             # correct, loss = c.model.test((all_x, all_y))
             # ds = len(all_y)
             # 这里的参数已经更新
-            correct, loss, ds = c.test(on_train=False)
+            # correct, loss, ds = c.test(on_train=False)
+            support_batch = next(self.test_support_batches[c.id])
+            query_batch = next(self.test_query_batches[c.id])
+            correct, loss = c.model.test_meta(support_batch, query_batch)
+            ds = len(query_batch)
             tot_correct.append(correct)
             num_samples.append(ds)
             tot_losses.append(loss)
@@ -166,32 +170,20 @@ class FedMetaBaseServer(BaseFedarated):
         comps = []
         weight_before = clients[0].get_params()
         train_size = []
-        support_loss, support_sz = [], []
-        query_loss, query_sz = [], []
         for c in clients:  # simply drop the slow devices
             # communicate the latest model
             c.set_params(self.latest_model)
             support_batch = next(self.train_support_batches[c.id])
             query_batch = next(self.train_query_batches[c.id])
-            grads1, loss1, weights1, comp1 = c.solve_sgd(support_batch)
+            # grads1, loss1, weights1, comp1 = c.model.solve_sgd_meta(support_batch)
             # 基于 query, 这时候网络的参数为 theta'
-            grads2, loss2, weights2, comp2 = c.solve_sgd(query_batch)
+            grads2, loss2, weights2, comp2 = c.model.solve_sgd_meta(support_batch, query_batch)
             # _, comp1 = c.model.solve_inner(data=c.train_data, client_id=c.id, round_i=round_i, num_epochs=1, batch_size=self.batch_size, hide_output=self.hide_client_output)
             # client_grads, comp2 = c.model.solve_inner_support_query(data=c.eval_data, client_id=c.id, round_i=round_i, num_epochs=1,
             #                            batch_size=self.batch_size, hide_output=self.hide_client_output)
-            support_sz.append(len(support_batch[1]))
-            query_sz.append(len(query_batch[1]))
-            #
-            support_loss.append(loss1)
-            query_loss.append(loss2)
             grads.append(grads2)
-            comps.append(comp1 + comp2)
-            train_size.append(support_sz[-1] + query_sz[-1])
-        #计算相关的信息
-        avg_spt_loss = np.dot(support_sz, support_loss) / np.sum(support_sz)
-        avg_qry_loss = np.dot(query_sz, query_loss) / np.sum(query_sz)
-        print('\tRound ', round_i, ', average support loss:', avg_spt_loss, ', query loss:', avg_qry_loss)
-        self.metrics.update_custom_scalars(round_i, avg_qry_loss=avg_qry_loss, avg_spt_loss=avg_spt_loss)
+            comps.append(comp2)
+            train_size.append(c.num_train_samples + c.num_test_samples)
         return weight_before, grads, comps, train_size
 
     def _impl_meta_sgd(self, clients):

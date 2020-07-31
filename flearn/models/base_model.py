@@ -9,8 +9,9 @@ from flearn.utils.tf_utils import process_grad
 
 class BaseModel(abc.ABC):
 
-    def __init__(self, optimizer, seed=1):
+    def __init__(self, optimizer, options, seed=1):
         self.optimizer = optimizer
+        self.options = options
         # create computation graph
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -107,7 +108,6 @@ class BaseModel(abc.ABC):
             grads, loss, _ = self.sess.run([self.grads, self.loss, self.train_op],
                                            feed_dict={self.features: mini_batch_data[0],
                                                       self.labels: mini_batch_data[1]})
-        grads = process_grad(grads)  # 扁平化, 方便处理
         comp = len(mini_batch_data[1]) * self.flops
         weights = self.get_params()
         return grads, loss, weights, comp

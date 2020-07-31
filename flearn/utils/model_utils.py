@@ -2,7 +2,6 @@ import json
 import numpy as np
 import os
 import time
-from torch.utils.tensorboard import SummaryWriter
 
 
 def mkdir(path):
@@ -247,8 +246,8 @@ class Metrics2(object):
         #     self.exp_name += '_{}'.format(suffix)
         train_event_folder = mkdir(os.path.join(self.result_path, self.exp_name, 'train.event'))
         eval_event_folder = mkdir(os.path.join(self.result_path, self.exp_name, 'eval.event'))
-        self.train_writer = SummaryWriter(train_event_folder)
-        self.eval_writer = SummaryWriter(eval_event_folder)
+        # self.train_writer = SummaryWriter(train_event_folder)
+        # self.eval_writer = SummaryWriter(eval_event_folder)
 
     def update_commu_stats(self, round_i, stats):
         cid, bytes_w, comp, bytes_r = \
@@ -268,36 +267,36 @@ class Metrics2(object):
         self.gradnorm_on_train_data[round_i] = train_stats['gradnorm']
         self.graddiff_on_train_data[round_i] = train_stats['graddiff']
 
-        self.train_writer.add_scalar('train_loss', train_stats['loss'], round_i)
-        self.train_writer.add_scalar('train_acc', train_stats['acc'], round_i)
-        self.train_writer.add_scalar('gradnorm', train_stats['gradnorm'], round_i)
-        self.train_writer.add_scalar('graddiff', train_stats['graddiff'], round_i)
+        # self.train_writer.add_scalar('train_loss', train_stats['loss'], round_i)
+        # self.train_writer.add_scalar('train_acc', train_stats['acc'], round_i)
+        # self.train_writer.add_scalar('gradnorm', train_stats['gradnorm'], round_i)
+        # self.train_writer.add_scalar('graddiff', train_stats['graddiff'], round_i)
 
     def update_grads_stats(self, round_i, stats):
         self.gradnorm_on_train_data[round_i] = stats['gradnorm']
         self.graddiff_on_train_data[round_i] = stats['graddiff']
-        self.train_writer.add_scalar('gradnorm', stats['gradnorm'], round_i)
-        self.train_writer.add_scalar('graddiff', stats['graddiff'], round_i)
+        # self.train_writer.add_scalar('gradnorm', stats['gradnorm'], round_i)
+        # self.train_writer.add_scalar('graddiff', stats['graddiff'], round_i)
 
     def update_train_stats_only_acc_loss(self, round_i, train_stats):
         self.loss_on_train_data[round_i] = train_stats['loss']
         self.acc_on_train_data[round_i] = train_stats['acc']
-        self.train_writer.add_scalar('train_loss', train_stats['loss'], round_i)
-        self.train_writer.add_scalar('train_acc', train_stats['acc'], round_i)
+        # self.train_writer.add_scalar('train_loss', train_stats['loss'], round_i)
+        # self.train_writer.add_scalar('train_acc', train_stats['acc'], round_i)
 
     def update_eval_stats(self, round_i, eval_stats):
         self.loss_on_eval_data[round_i] = eval_stats['loss']
         self.acc_on_eval_data[round_i] = eval_stats['acc']
 
-        self.eval_writer.add_scalar('test_loss', eval_stats['loss'], round_i)
-        self.eval_writer.add_scalar('test_acc', eval_stats['acc'], round_i)
+        # self.eval_writer.add_scalar('test_loss', eval_stats['loss'], round_i)
+        # self.eval_writer.add_scalar('test_acc', eval_stats['acc'], round_i)
 
     def update_custom_scalars(self, round_i, **data):
         for key, scalar in data.items():
             if key not in self.customs_data:
                 self.customs_data[key] = [0] * self.num_rounds
             self.customs_data[key][round_i] = scalar
-            self.train_writer.add_scalar(key, scalar_value=scalar, global_step=round_i)
+            # self.train_writer.add_scalar(key, scalar_value=scalar, global_step=round_i)
 
     def write(self):
         metrics = dict()

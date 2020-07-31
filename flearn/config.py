@@ -1,13 +1,11 @@
 # tensorflow 版本的配置文件
 import argparse
 DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018', 'nist', 'sent140', 'omniglot', 'femnist']
-TRAINERS_TONAMES = {'fedavg': 'Server', 'fedprox': 'Server', 'feddane': 'Server', 'maml': 'Server', 'fedmeta': 'FedMetaBaseServer'}
+TRAINERS_TONAMES = {'fedavg': 'Server', 'fedprox': 'Server', 'feddane': 'Server', 'maml': 'Server', 'fedmeta': 'FedMetaBaseServer', 'fedmeta2': 'FedMetaBaseServer'}
 TRAINERS = TRAINERS_TONAMES.keys()
 # 模型的参数, 这里的模型都不可复用故而直接写死
 MODEL_PARAMS = {
-    'sent140.bag_dnn': (2,), # num_classes
-    'sent140.stacked_lstm': (25, 2, 100), # seq_len, num_classes, num_hidden
-    'sent140.stacked_lstm_no_embeddings': (25, 2, 100), # seq_len, num_classes, num_hidden
+    'sent140.stacked_lstm': (25, 2, 100, None),  # seq_len, num_classes, n_hidden, emb_arr=None(这个之前是默认值)
     'nist.mclr': (26,),  # num_classes
     'mnist.mclr': (10,), # num_classes
     'mnist.cnn': (10,),  # num_classes
@@ -16,6 +14,7 @@ MODEL_PARAMS = {
     'synthetic.mclr': (10, ),  # num_classes
     'omniglot.cnn': (5, ),  # num_classes
     'femnist.cnn': (62, 28),  # num_classes, image_size
+    'femnist.cnn2': (62, 28),  # num_classes, image_size 测试用的
 }
 
 def base_options():
@@ -97,6 +96,11 @@ def base_options():
                         help='加载的数据格式, json 为 Leaf以及Li T.等人定义的格式, 默认为 pkl',
                         type=str,
                         default='pkl')
+    parser.add_argument('--optimizer',
+                        help='设置优化器',
+                        type=str,
+                        default='gd',
+                        choices=['gd', 'adam', 'rmsprop'])
     # FedAvg Scheme
     parser.add_argument('--scheme',
                         help='Scheme 1;Scheme 2;Transformed scheme 2',
@@ -119,9 +123,10 @@ def add_dynamic_options(argparser):
     algo = params.algo
     if algo in ['maml']:
         argparser.add_argument('--num_fine_tune', help='number of fine-tune', type=int, default=0)
-    elif algo in ['fedmeta']:
+    elif algo in ['fedmeta', 'fedmeta2']:
         argparser.add_argument('--meta_algo', help='使用的元学习算法, 默认 maml', type=str, default='maml', choices=['maml', 'reptile', 'meta_sgd'])
         argparser.add_argument('--outer_lr', help='更新元学习中的外部学习率', type=float, required=True)
+        argparser.add_argument('--meta_num_fine_tune', type=int, default=5)
     elif algo in ['fedprox']:
         argparser.add_argument('--mu',
                             help='mu',
