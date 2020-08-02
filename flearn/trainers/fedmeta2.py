@@ -1,10 +1,42 @@
 import numpy as np
 import tqdm
 import time
+import os
+import pandas as pd
 import tensorflow as tf
 
 from flearn.utils.model_utils import gen_batch
 from .fedbase import BaseFedarated
+
+
+class Adam:
+    def __init__(self, lr=0.01, betas=(0.9, 0.999), eps=1e-08):
+        self.lr = lr
+        self.beta1 = betas[0]
+        self.beta2 = betas[1]
+        self.eps = eps
+        self.m = dict()
+        self.v = dict()
+        self.n = 0
+        self.creted_momtem_grad_index = set()
+
+    def __call__(self, params, grads, i):
+        # 创建对应的 id
+        if i not in self.m:
+            self.m[i] = np.zeros_like(params)
+        if i not in self.v:
+            self.v[i] = np.zeros_like(params)
+
+        self.m[i] = self.beta1 * self.m[i] + (1 - self.beta1) * grads
+        self.v[i] = self.beta2 * self.v[i] + (1 - self.beta2) * np.square(grads)
+
+        alpha = self.lr * np.sqrt(1 - np.power(self.beta2, self.n))
+        alpha = alpha / (1 - np.power(self.beta1, self.n))
+
+        params -= alpha * self.m[i] / (np.sqrt(self.v[i]) + self.eps)
+
+    def increase_n(self):
+        self.n += 1
 
 
 class FedMetaBaseServer(BaseFedarated):
@@ -13,24 +45,22 @@ class FedMetaBaseServer(BaseFedarated):
         print('Using Federated-Meta to Train')
         self.meta_algo = params["meta_algo"]
         self.num_fine_tune = params['meta_num_fine_tune']
-        if self.meta_algo == 'meta_sgd':
-            inner_opt = tf.train.AdamOptimizer(1.0)
-        else:
-            inner_opt = tf.train.AdamOptimizer(1.0)
+        inner_opt = tf.train.AdamOptimizer(params['lr'])
         #
         append = f'meta_algo[{self.meta_algo}]_outer_lr{params["outer_lr"]}_finetune{self.num_fine_tune}'
         super(FedMetaBaseServer, self).__init__(params, learner, dataset, optimizer=inner_opt, append2metric=append)
         self.split_clients()
         # 对于所有的客户端均生成 generator
 
-        self.train_support_batches, self.train_query_batches = self.generate_mini_batch_generator(self.train_clients)
-        self.test_support_batches, self.test_query_batches = self.generate_mini_batch_generator(self.test_clients, self.num_fine_tune)
+        # self.train_support_batches, self.train_query_batches = self.generate_mini_batch_generator(self.train_clients)
+        # self.test_support_batches, self.test_query_batches = self.generate_mini_batch_generator(self.test_clients)
         if self.meta_algo in ['maml', 'meta_sgd']:
             self.impl = self._impl_maml
         else:
             raise NotImplementedError
         print('Using ', params['meta_algo'], "as implement of FedMeta")
         self.outer_lr = params['outer_lr']
+        self.optimizer = Adam(lr=self.outer_lr)
 
 
     def split_clients(self):
@@ -78,10 +108,27 @@ class FedMetaBaseServer(BaseFedarated):
             # ds = len(all_y)
             # 这里的参数已经更新
             # correct, loss, ds = c.test(on_train=False)
-            support_batch = next(self.test_support_batches[c.id])
-            query_batch = next(self.test_query_batches[c.id])
-            correct, loss = c.model.test_meta(support_batch, query_batch)
-            ds = len(query_batch)
+            # support_batch = next(self.test_support_batches[c.id])
+            # query_batch = next(self.test_query_batches[c.id])
+            # correct, loss = c.model.test_meta(support_batch, query_batch)
+            # ds = len(query_batch[1])
+            # support_batch = next(self.test_support_batches[c.id])
+            # query_batch = next(self.test_query_batches[c.id])
+            # client_wise_correct = []
+            # client_wise_size = []
+            # client_wise_loss = []
+            # for _ in range(self.num_fine_tune):
+            #     correct, loss = c.model.test_meta(support_batch, query_batch)
+            #     # 这里的 correct  loss 是 query 上的
+            #     ds = len(query_batch[1])
+            #     client_wise_loss.append(loss)
+            #     client_wise_size.append(ds)
+            #     client_wise_correct.append(correct)
+            # tot_correct.extend(client_wise_correct)
+            # num_samples.extend(client_wise_size)
+            # tot_losses.extend(client_wise_loss)
+            correct, loss = c.model.test_meta(c.train_data, c.eval_data)
+            ds = c.num_test_samples + c.num_train_samples
             tot_correct.append(correct)
             num_samples.append(ds)
             tot_losses.append(loss)
@@ -137,6 +184,21 @@ class FedMetaBaseServer(BaseFedarated):
         #     # i 表示的当前的梯度的 index
         #     # 总是 client 1 的梯度的形状
         #     grad_sum = np.zeros_like(grads[0][i])
+        #     # num_sz = 0
+        #     for ic in range(m):
+        #         grad_sum += grads[ic][i]  # * train_size[ic]
+        #         # num_sz += train_size[ic]
+        #     # grad_sum /= num_sz
+        #     # 累加之后, 进行梯度下降
+        #     g.append(grad_sum)
+        # return [u - (v * self.outer_lr / m) for u, v in zip(weights_before, g)]
+        ####
+        # m = len(grads)
+        # g = []
+        # for i in range(len(grads[0])):
+        #     # i 表示的当前的梯度的 index
+        #     # 总是 client 1 的梯度的形状
+        #     grad_sum = np.zeros_like(grads[0][i])
         #     num_sz = 0
         #     for ic in range(len(grads)):
         #         grad_sum += grads[ic][i] * train_size[ic]
@@ -145,20 +207,43 @@ class FedMetaBaseServer(BaseFedarated):
         #     # 累加之后, 进行梯度下降
         #     g.append(grad_sum)
         # return [u - (v * self.outer_lr) for u, v in zip(weights_before, g)]
+        ###########
         m = len(grads)
         g = []
         for i in range(len(grads[0])):
             # i 表示的当前的梯度的 index
             # 总是 client 1 的梯度的形状
             grad_sum = np.zeros_like(grads[0][i])
-            num_sz = 0
             for ic in range(len(grads)):
                 grad_sum += grads[ic][i]
-                num_sz += train_size[ic]
-            # grad_sum /= num_sz
             # 累加之后, 进行梯度下降
             g.append(grad_sum)
-        return [u - (v * self.outer_lr / m) for u, v in zip(weights_before, g)]
+        # 普通的梯度下降 [u - (v * self.outer_lr / m) for u, v in zip(weights_before, g)]
+        self.optimizer.increase_n()
+        new_weights = weights_before  # [w.copy() for w in weights_before]
+        for i in range(len(new_weights)):
+            self.optimizer(new_weights[i], g[i] / m, i=i)
+        return new_weights
+        ########
+        # m = len(grads)
+        # g = []
+        # for i in range(len(grads[0])):
+        #     # i 表示的当前的梯度的 index
+        #     # 总是 client 1 的梯度的形状
+        #     grad_sum = np.zeros_like(grads[0][i])
+        #     num_sz = 0
+        #     for ic in range(len(grads)):
+        #         grad_sum += grads[ic][i] * train_size[ic]
+        #         num_sz += train_size[ic]
+        #     grad_sum /= num_sz
+        #     # 累加之后, 进行梯度下降
+        #     g.append(grad_sum)
+        # # 普通的梯度下降 [u - (v * self.outer_lr / m) for u, v in zip(weights_before, g)]
+        # self.optimizer.increase_n()
+        # new_weights = [w.copy() for w in weights_before]
+        # for i in range(len(new_weights)):
+        #     self.optimizer(new_weights[i], g[i], i=i)
+        # return new_weights
 
     def _impl_maml(self, clients, round_i):
         """
@@ -173,26 +258,49 @@ class FedMetaBaseServer(BaseFedarated):
         for c in clients:  # simply drop the slow devices
             # communicate the latest model
             c.set_params(self.latest_model)
-            support_batch = next(self.train_support_batches[c.id])
-            query_batch = next(self.train_query_batches[c.id])
-            # grads1, loss1, weights1, comp1 = c.model.solve_sgd_meta(support_batch)
-            # 基于 query, 这时候网络的参数为 theta'
-            grads2, loss2, weights2, comp2 = c.model.solve_sgd_meta(support_batch, query_batch)
+            # support_batch = next(self.train_support_batches[c.id])
+            # query_batch = next(self.train_query_batches[c.id])
+            # 这里的梯度的需要根绝
+            # for _ in range(self.num_fine_tune):
+
+                # grads1, loss1, weights1, comp1 = c.model.solve_sgd_meta(support_batch)
+                # 基于 query, 这时候网络的参数为 theta'
+                # grads2, loss2, weights2, comp2 = c.model.solve_sgd_meta(support_batch, query_batch)
+                # comp += comp2
             # _, comp1 = c.model.solve_inner(data=c.train_data, client_id=c.id, round_i=round_i, num_epochs=1, batch_size=self.batch_size, hide_output=self.hide_client_output)
             # client_grads, comp2 = c.model.solve_inner_support_query(data=c.eval_data, client_id=c.id, round_i=round_i, num_epochs=1,
             #                            batch_size=self.batch_size, hide_output=self.hide_client_output)
+            # grads2, loss2, comp = c.model.solve_sgd_meta(c.train_data, c.eval_data, self.batch_size)
+            grads2, loss2, comp, ds = c.model.solve_sgd_meta_full_data(c.train_data, c.eval_data)
             grads.append(grads2)
-            comps.append(comp2)
-            train_size.append(c.num_train_samples + c.num_test_samples)
+            comps.append(comp)
+            train_size.append(ds)
         return weight_before, grads, comps, train_size
 
-    def _impl_meta_sgd(self, clients):
+    def eval_to_file(self, round_i, sync_params=True):
         """
-        FedMetaSGD
-        :param clients:
-        :return:
+        测试模型在所有客户端上的准确率
+        :param round_i:
+        :param on_train: 是否是训练数据
+        :param sync_params: 同步参数(如果量此调用, 第二次可以设为 False)
+        :return: {'loss': loss, 'acc': acc, 'time': time_diff }
         """
-        # 与 FedMetaMAML的却别主要是引入了参数向量
+        # save_path = os.path.join(self.metric_prefix, 'eval_result_at_round_{}.csv'.format(round_i))
+        # df = pd.DataFrame(columns=['id', 'train_acc', 'train_loss', 'test_loss', 'test_acc'])
+        # if sync_params:
+        #     self.client_model.set_params(self.latest_model)
+        # # begin_time = time.time()
+        # for i, c in enumerate(self.clients):
+        #     train_correct, train_loss, train_ds = c.test(on_train=True)
+        #     test_correct, test_loss, test_ds = c.test(on_train=False)
+        #     # 添加数据信息
+        #     df = df.append({'id': c.id, 'train_acc': train_correct / train_ds, 'test_acc': test_correct / test_ds,
+        #                'train_loss': train_loss, 'test_loss': test_loss}, ignore_index=True)
+        #     print('Eval on client:', c.id)
+        # # end_time = time.time()
+        # # 保存为路径
+        # df.to_csv(save_path)
+        # print(f'>>> Saved eval result to "{save_path}"')
         pass
 
     def train(self):
@@ -221,6 +329,6 @@ class FedMetaBaseServer(BaseFedarated):
         stats = self.local_test_only_acc(round_i=self.num_rounds, on_train=False,
                                          sync_params=True)  # have set the latest model for all clients
         # stats_train = self.local_test_only_acc(round_i=self.num_rounds, on_train=True, sync_params=False)
-        self.eval_to_file(round_i=self.num_epochs, sync_params=True)
+        self.eval_to_file(round_i=self.num_rounds, sync_params=True)
         self.metrics.write()
         self.save_model(self.num_rounds)

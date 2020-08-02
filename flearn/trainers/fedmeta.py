@@ -52,7 +52,7 @@ class FedMetaBaseServer(BaseFedarated):
         #
         print('用于训练的客户端数量{}, 用于验证:{}, 用于测试: {}'.format(len(self.train_clients), len(self.eval_clients), len(self.test_clients)))
 
-    def local_test_only_acc(self, round_i, on_train=False, sync_params=True):
+    def local_test_only_acc(self, round_i, on_train=None, sync_params=True):
         """
         基于测试集的客户端. 这
         :param round_i:
@@ -60,6 +60,7 @@ class FedMetaBaseServer(BaseFedarated):
         :param sync_params:
         :return:
         """
+        assert on_train is None
         num_samples = []
         tot_correct = []
         tot_losses = []
@@ -77,6 +78,7 @@ class FedMetaBaseServer(BaseFedarated):
             # correct, loss = c.model.test((all_x, all_y))
             # ds = len(all_y)
             # 这里的参数已经更新
+            # correct, loss, ds = c.model.test_all_data_points(c.train_data, c.eval_data)
             correct, loss, ds = c.test(on_train=False)
             tot_correct.append(correct)
             num_samples.append(ds)
@@ -89,15 +91,12 @@ class FedMetaBaseServer(BaseFedarated):
         avg_loss = np.dot(tot_losses, num_samples) * 1.0 / np.sum(num_samples)
         stats = {'loss': avg_loss, 'acc': avg_correct, 'time': end_time - begin_time}
         # 始终不隐藏
-        print('>>> On {} dataset: round: {} / acc: {:.3%} / '
+        print('>>> On query set: round: {} / acc: {:.3%} / '
               'loss: {:.4f} / Time: {:.2f}s'.format(
-            'Train' if on_train else 'Test',
             round_i, stats['acc'],
             stats['loss'], stats['time']))
-        if on_train:
-            self.metrics.update_train_stats_only_acc_loss(round_i=round_i, train_stats=stats)
-        else:
-            self.metrics.update_eval_stats(round_i=round_i, eval_stats=stats)
+
+        self.metrics.update_eval_stats(round_i=round_i, eval_stats=stats)
         return stats
 
     def select_clients(self, round_i, num_clients=20):
@@ -210,7 +209,7 @@ class FedMetaBaseServer(BaseFedarated):
         for i in range(self.start_round, self.num_rounds):
             # test model
             if (i + 1) % self.eval_every_round == 0:
-                stats = self.local_test_only_acc(round_i=i, on_train=False, sync_params=True)  # have set the latest model for all clients
+                stats = self.local_test_only_acc(round_i=i, on_train=None, sync_params=True)  # have set the latest model for all clients
                 # 接下来再运行必须重新设置网络的参数
                 # stats_train = self.local_test_only_acc(round_i=i, on_train=True, sync_params=False)
 
@@ -226,9 +225,9 @@ class FedMetaBaseServer(BaseFedarated):
                 self.metrics.write()
 
         # final test model
-        stats = self.local_test_only_acc(round_i=self.num_rounds, on_train=False,
+        stats = self.local_test_only_acc(round_i=self.num_rounds, on_train=None,
                                          sync_params=True)  # have set the latest model for all clients
         # stats_train = self.local_test_only_acc(round_i=self.num_rounds, on_train=True, sync_params=False)
-        self.eval_to_file(round_i=self.num_epochs, sync_params=True)
+        self.eval_to_file(round_i=self.num_rounds, sync_params=True)
         self.metrics.write()
         self.save_model(self.num_rounds)

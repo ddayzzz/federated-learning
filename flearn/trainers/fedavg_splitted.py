@@ -11,7 +11,8 @@ class Server(BaseFedarated):
         # 这个算法和 FedAvg 的区别就是客户端是分开的
         print('Using Federated avg splitted to Train')
         opt = tf.train.AdamOptimizer(params['lr'])
-        append = 'optimizer_adam'
+        self.num_fine_tune = params['meta_num_fine_tune']
+        append = f'optimizer_adam_finetune{self.num_fine_tune}'
         super(Server, self).__init__(params, learner, dataset, optimizer=opt, append2metric=append)
         self.split_clients()
 
@@ -45,11 +46,18 @@ class Server(BaseFedarated):
         num_samples = []
         tot_correct = []
         tot_losses = []
-        if sync_params:
-            self.client_model.set_params(self.latest_model)
         begin_time = time.time()
         for c in self.test_clients:
-            correct, loss, ds = c.test(on_train=on_train)
+            if sync_params:
+                self.client_model.set_params(self.latest_model)
+            # correct, loss, ds = c.test(on_train=on_train)
+            if self.num_fine_tune > 1:
+                # 这里需要使用
+                spt = c.train_data
+                qry = c.eval_data
+
+            else:
+                correct, loss, ds = c.model.test_all_data_points(c.train_data, c.eval_data)
             tot_correct.append(correct)
             num_samples.append(ds)
             tot_losses.append(loss)
@@ -91,27 +99,29 @@ class Server(BaseFedarated):
             # test model
             if (i + 1) % self.eval_every_round == 0:
                 stats = self.local_test_only_acc(round_i=i, on_train=False, sync_params=True)  # have set the latest model for all clients
-                stats_train = self.local_test_only_acc(round_i=i, on_train=True, sync_params=False)
+                # stats_train = self.local_test_only_acc(round_i=i, on_train=True, sync_params=False)
 
             indices, selected_clients = self.select_clients(i, num_clients=self.clients_per_round)  # uniform sampling
 
             csolns = []  # buffer for receiving client solutions
-            sstats = []  # 记录客户端运行的数据
+            # sstats = []  # 记录客户端运行的数据
             for idx, c in enumerate(selected_clients.tolist()):  # simply drop the slow devices
                 # communicate the latest model
                 c.set_params(self.latest_model)
 
                 # solve minimization locally
 
-                soln, stats = c.solve_inner(num_epochs=self.num_epochs, batch_size=self.batch_size, round_i=i, hide_output=self.hide_client_output)
-
+                # soln, stats = c.solve_inner(num_epochs=self.num_epochs, batch_size=self.batch_size, round_i=i, hide_output=self.hide_client_output)
+                # 这里的使用完整的数据集进行训练, 测试就是使用 test_client 的完整的数据
+                soln, comp, sz = c.model.solve_all_data_points(c.train_data, c.eval_data)
                 # gather solutions from client
-                csolns.append(soln)
-                sstats.append(stats)
+                csolns.append((sz, soln))
+
+                # sstats.append(stats)
                 # track communication cost
                 # self.metrics.update(rnd=i, cid=c.id, stats=stats)
             # 更新 计算量, 读取字节, 写入字节等信息
-            self.metrics.extend_commu_stats(round_i=i, stats_list=sstats)
+            # self.metrics.extend_commu_stats(round_i=i, stats_list=sstats)
             # update models
             self.latest_model = self.aggregate(csolns)
 

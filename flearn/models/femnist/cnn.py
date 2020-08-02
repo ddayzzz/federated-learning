@@ -83,8 +83,26 @@ class Model(BaseModel):
         sz = len(mini_batch_data[1])
         comp = sz * self.flops
         weights = self.get_params()
+        # 梯度关于 大小整除
+        grads = [g / sz for g in grads]
         return grads, loss, weights, comp
 
+    def solve_gd(self, data):
+        """
+        运行一次 SGD
+        :param mini_batch_data:
+        :return:
+        """
+        with self.graph.as_default():
+            grads, loss, _ = self.sess.run([self.grads, self.loss, self.train_op],
+                                           feed_dict={self.features: data['x'],
+                                                      self.labels: data['y']})
+        sz = len(data['y'])
+        comp = sz * self.flops
+        weights = self.get_params()
+        # 梯度关于 大小整除
+        grads = [g / sz for g in grads]
+        return grads, loss, weights, comp
     # 由于保存另外一个可以被训练的参数 alpha, 所以需要重新设定
     # def solve_sgd(self, mini_batch_data):
     #     if not self.use_meta_sgd:
@@ -126,16 +144,34 @@ class Model(BaseModel):
         grads_mean = [g / num_inter for g in grads_sum]
         return grads_mean, comp
 
-    # def test(self, data):
-    #     """
-    #     基于完整的数据集测试
-    #     :param data:
-    #     :return:
-    #     """
-    #     with self.graph.as_default():
-    #         tot_correct, loss = self.sess.run([self.eval_metric_ops, self.loss],
-    #                                           feed_dict={self.features: data[0], self.labels: data[1]})
-    #     return tot_correct, loss
+    # 以下用于 FedAvg 的部分, 即 FedAvg, FedAvgMeta
+    def test_all_data_points(self, train_data, test_data):
+        """
+        基于完整的数据集测试
+        :param data:
+        :return:
+        """
+        X = np.concatenate((train_data['x'], test_data['x']), axis=0)
+        y = np.concatenate((train_data['y'], test_data['y']), axis=0)
+        with self.graph.as_default():
+            tot_correct, loss = self.sess.run([self.eval_metric_ops, self.loss],
+                                              feed_dict={self.features: X, self.labels: y})
+        return tot_correct, loss, len(y)
+
+    def solve_all_data_points(self, train_data, test_data):
+        """
+        基于完整的数据集测试
+        :param data:
+        :return:
+        """
+        X = np.concatenate((train_data['x'], test_data['x']), axis=0)
+        y = np.concatenate((train_data['y'], test_data['y']), axis=0)
+        with self.graph.as_default():
+            self.sess.run(self.train_op,
+                          feed_dict={self.features: X, self.labels: y})
+        soln = self.get_params()
+        comp = len(y) * self.flops
+        return soln, comp, len(y)
 
     # 一下为 MAML 的格式
     def create_conv_variables(self, kernel_size, in_dim, out_dim, conv_name, kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d):
