@@ -316,7 +316,7 @@ class Metrics2(object):
         metrics['graddiff_on_train_data'] = self.graddiff_on_train_data
 
         metrics['loss_on_eval_data'] = self.loss_on_eval_data
-        metrics['acc_on_eval_data'] = self.acc_on_eval_data
+        metrics['acc_on_test_data'] = self.acc_on_eval_data
 
         # Dict(key=cid, value=list(stats for each round))
         metrics['client_computations'] = self.client_computations

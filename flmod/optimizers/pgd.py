@@ -61,7 +61,7 @@ class PerturbedGradientDescent(Optimizer):
                 #     else:
                 #         d_p = buf
                 if w_old is not None:
-                    d_p.add_(mu, p.data - w_old_p.data)
+                    d_p.add_(p.data - w_old_p.data, alpha=mu)
                 p.data.add_(-group['lr'], d_p)
 
         return loss

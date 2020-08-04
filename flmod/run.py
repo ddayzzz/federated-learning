@@ -4,9 +4,9 @@ import torch
 import os
 import random
 from dataset.data_reader import read_data
-from flmod.config import DATASETS, TRAINERS
-from flmod.config import model_settings
+from flmod.config import DATASETS, TRAINERS, MODEL_CONFIG
 from flmod.config import base_options, add_dynamic_options
+
 
 def read_options():
     parser = base_options()
@@ -32,12 +32,18 @@ def read_options():
     assert dataset_name in DATASETS, "{} not in dataset {}!".format(dataset_name, DATASETS)
 
     # 将配置的参数添加到测试文件中
-    options.update(model_settings.config(dataset_name, options['model']))
+    model_cfg_key ='.'.join((dataset_name, options['model']))
+    model_cfg = MODEL_CONFIG.get(model_cfg_key)
 
     # 加载选择的 solver 类
     trainer_path = 'flmod.solvers.%s' % options['algo']
     mod = importlib.import_module(trainer_path)
     trainer_class = getattr(mod, TRAINERS[options['algo']])
+
+    # 加载模型类
+    model_path = 'flmod.models.{0}.{0}'.format(dataset_name)
+    mod = importlib.import_module(model_path)
+    model_obj = getattr(mod, 'Model')(options, model_cfg)
 
     # 打印参数
     max_length = max([len(key) for key in options.keys()])
@@ -46,7 +52,7 @@ def read_options():
     for keyPair in sorted(options.items()):
         print(fmt_string % keyPair)
 
-    return options, trainer_class, dataset_name, sub_data
+    return options, model_obj, trainer_class, dataset_name, sub_data
 
 
 def main():
@@ -54,17 +60,14 @@ def main():
     dataset_prefix = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
     # 解析参数
-    options, trainer_class, dataset_name, sub_data = read_options()
+    options, model_obj, trainer_class, dataset_name, sub_data = read_options()
 
     train_path = os.path.join(dataset_prefix, 'dataset', dataset_name, 'data', 'train')
     test_path = os.path.join(dataset_prefix, 'dataset', dataset_name, 'data', 'test')
 
-    all_data_info, (train_dataset, test_datatset) = read_data(train_path, test_path, sub_data=sub_data), \
-                                                    model_settings.get_entire_dataset(dataset_name, options=options)
-    all_data_info = list(all_data_info)
-    all_data_info.extend([train_dataset, test_datatset, model_settings.dataset_config(dataset_name, options=options)])
+    all_data_info = read_data(train_path, test_path, sub_data=sub_data, data_format=options['data_format'])
     # 调用solver
-    trainer = trainer_class(options, all_data_info)
+    trainer = trainer_class(options, all_data_info, model_obj)
     trainer.train()
 
 

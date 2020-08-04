@@ -2,11 +2,11 @@ import torch
 import time
 import numpy as np
 from flmod.solvers.fedbase import BaseFedarated
-from flmod.models.models import choose_model_criterion
-from flmod.optimizers.pgd import PerturbedGradientDescent
 
 
-class FedProx(BaseFedarated):
+
+
+class FedProxBack(BaseFedarated):
 
     def __init__(self, options, all_data_info):
         """
@@ -170,4 +170,104 @@ class FedProx(BaseFedarated):
 
         self.test_latest_model_on_traindata(self.num_rounds)
         self.test_latest_model_on_evaldata(self.num_rounds)
+        self.metrics.write()
+
+
+class FedProx(BaseFedarated):
+
+    def __init__(self, options, all_data_info, model_obj):
+        print('>>> Using FedProx')
+        a = f'mu_{options["mu"]}_dp_{[options["drop_rate"]]}'
+        super(FedProx, self).__init__(options=options, model=model_obj, read_dataset=all_data_info, append2metric=a)
+        self.drop_rate = options['drop_rate']
+
+    def select_clients(self, round_i, num_clients):
+        """
+        这个返回client的索引而非对象
+        :param round_i:
+        :param num_clients:
+        :return:
+        """
+        num_clients = min(num_clients, self.num_clients)
+        np.random.seed(round_i)  # 确定每一轮次选择相同的客户端(用于比较不同算法在同一数据集下的每一轮的客户端不变)
+        return np.random.choice(self.num_clients, num_clients, replace=False).tolist()
+
+    def aggregate(self, solns, num_samples):
+        return self.aggregate_parameters_weighted(solns, num_samples)
+
+    @staticmethod
+    def flat_params(params):
+        """
+        得到扁平的模型的参数
+        :param model: 模型类
+        :return: 扁平化的参数，顺序为 model.parameters() 的顺序
+        """
+        params = [p.data.view(-1) for p in params]
+        flat_params = torch.cat(params)
+        return flat_params
+
+    def solve_epochs(self, round_i, clients, epoch=None):
+        selected_client_indices = clients
+        activated_clients_indices = np.random.choice(selected_client_indices,
+                                                     round(self.clients_per_round * (1 - self.drop_rate)),
+                                                     replace=False)
+        num_samples = []
+        tot_corrects = []
+        losses = []
+
+        solns = []
+        for c_index in selected_client_indices:
+            if c_index in activated_clients_indices:
+                # 正常运行
+                epoch = self.num_epochs
+            else:
+                # 需要变化 epoch 的客户端
+                epoch = np.random.randint(low=1, high=self.num_epochs)
+            c = self.clients[c_index]
+            # 设置优化器的参数
+            c.optimizer.set_old_weights(old_weights=self.latest_model)
+            c.set_parameters_list(self.latest_model)
+            # 保存信息
+            stat, flop_stat, soln = c.solve_epochs(round_i=round_i, num_epochs=epoch, record_grads=False)
+            tot_corrects.append(stat['sum_corrects'])
+            num_samples.append(stat['num_samples'])
+            losses.append(stat['sum_loss'])
+            #
+            solns.append(soln)
+            # 写入测试的相关信息
+            self.metrics.update_commu_stats(round_i, flop_stat)
+
+        mean_loss = sum(losses) / sum(num_samples)
+        mean_acc = sum(tot_corrects) / sum(num_samples)
+
+        stats = {
+            'acc': mean_acc, 'loss': mean_loss,
+        }
+        if not self.quiet:
+            print(f'Round {round_i}, train metric mean loss: {mean_loss:.5f}, mean acc: {mean_acc:.3%}')
+        self.metrics.update_train_stats_only_acc_loss(round_i, stats)
+        return solns, num_samples
+
+
+    def train(self):
+        for round_i in range(self.num_rounds):
+            print(f'>>> Global Training Round : {round_i}')
+
+            selected_client_indices = self.select_clients(round_i=round_i, num_clients=self.clients_per_round)
+
+
+            solns, num_samples = self.solve_epochs(round_i=round_i, clients=selected_client_indices)
+
+            self.latest_model = self.aggregate(solns, num_samples)
+            # eval on test
+            if (round_i + 1) % self.eval_on_test_every_round == 0:
+                stats = self.eval_on(use_test_data=True, round_i=round_i, clients=self.clients)
+                self.metrics.update_eval_stats(round_i, stats)
+            if (round_i + 1) % self.eval_on_train_every_round == 0:
+                stats = self.eval_on(use_train_data=True, round_i=round_i, clients=self.clients)
+                self.metrics.update_eval_stats(round_i, stats)
+
+            if (round_i + 1) % self.save_every_round == 0:
+                # self.save_model(round_i)
+                self.metrics.write()
         self.metrics.write()

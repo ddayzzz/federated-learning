@@ -1,11 +1,10 @@
 import torch
-import time
 import numpy as np
 import tqdm
 from flmod.solvers.fedbase import BaseFedarated
 from flmod.models.models import choose_model_criterion
 from flmod.optimizers.gd import GradientDescend
-from flmod.models.workers import Worker
+from flmod.workers.workers import Worker
 from flmod.clients.base_client import BaseClient
 
 

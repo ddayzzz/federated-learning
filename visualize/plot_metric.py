@@ -84,13 +84,13 @@ if __name__ == '__main__':
     # dataset = 'synthetic_alpha0_beta0_iid'
     # dataset = 'brats2018_train_9_test_1'
     # dataset = 'shakespeare_all_data_niid_sf0.2_tf0.8_k0'
-    # plot(dataset, 'graddiff_on_train_data', 'loss_on_eval_data', 'acc_on_eval_data', exp_filter_re=r'dp0.9')
+    # plot(dataset, 'graddiff_on_train_data', 'loss_on_eval_data', 'acc_on_test_data', exp_filter_re=r'dp0.9')
     # dataset = 'brats2018_train_9_test_1'
-    # plot(dataset, 'loss_on_eval_data', 'acc_on_eval_data', exp_filter_re=r'mu0\.0_')
-    # plot(dataset, 'loss_on_eval_data', 'acc_on_eval_data', exp_filter_re=r'dp0\.0')
+    # plot(dataset, 'loss_on_eval_data', 'acc_on_test_data', exp_filter_re=r'mu0\.0_')
+    # plot(dataset, 'loss_on_eval_data', 'acc_on_test_data', exp_filter_re=r'dp0\.0')
     # datasets = ['synthetic_alpha0.5_beta0.5_niid', 'synthetic_alpha0_beta0_niid', 'synthetic_alpha1_beta1_niid', 'synthetic_alpha0_beta0_iid']
     # for ds in datasets:
-    #     plot(ds, 'graddiff_on_train_data', 'loss_on_eval_data', 'acc_on_eval_data')
+    #     plot(ds, 'graddiff_on_train_data', 'loss_on_eval_data', 'acc_on_test_data')
     result_prefix = '../flearn/result'
     dataset = 'femnist'
     exp_filter_re = None
@@ -98,5 +98,5 @@ if __name__ == '__main__':
         '../flearn/result/femnist/2020-07-26T15-07-12_fedavg_cnn__wn10_tn173_sd0_lr0.004_ep1_bs5': 'FedAvg',
     }
     infos = load_metrics(cfgs)
-    # plots_metric(infos, cfgs, title='femnist', loss_on_eval_data='测试集上的损失函数', acc_on_eval_data='测试集上的准确率')
+    # plots_metric(infos, cfgs, title='femnist', loss_on_eval_data='测试集上的损失函数', acc_on_test_data='测试集上的准确率')
     plots_eval_hist(infos, cfgs, title='femnist', loss_on_eval_data='测试集上的损失函数', acc_on_eval_data='测试集上的准确率')

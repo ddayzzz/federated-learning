@@ -219,6 +219,9 @@ def choose_model_criterion(options):
         if algo == 'maml':
             from flmod.models.meta_learn.omniglot import ConvolutionalNeuralNetwork
             model = ConvolutionalNeuralNetwork(in_channels=1, out_features=5)
+        elif algo == 'fedmeta':
+            from flmod.models.femnist.cnn import CNNModel
+            model = CNNModel(num_classes=options['num_classes'], image_size=options['image_size'])
         else:
             model = SimpleCNNMNIST()
     elif model_name == 'logistic':
@@ -238,6 +241,7 @@ def choose_model_criterion(options):
     else:
         raise ValueError("Not support model: {}!".format(model_name))
     return move_model_to(model, device=device), cri.to(device)
+
 
 if __name__ == '__main__':
     model = StackedLSTM(80,80,10,'cpu:0')

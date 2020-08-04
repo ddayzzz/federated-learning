@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pandas as pd
 import json
 from torch.utils.tensorboard import SummaryWriter
 import time
@@ -12,26 +13,35 @@ def mkdir(path):
 
 
 class Metrics(object):
-    def __init__(self, clients, options, name='', append2suffix=None):
+
+    def __init__(self, clients, options, name='', append2suffix=None, result_prefix='./result', train_metric_extend_columns=None):
         self.options = options
         num_rounds = options['num_rounds'] + 1
+
         self.bytes_written = {c.id: [0] * num_rounds for c in clients}
         self.client_computations = {c.id: [0] * num_rounds for c in clients}
         self.bytes_read = {c.id: [0] * num_rounds for c in clients}
 
-        # Statistics in training procedure
-        self.loss_on_train_data = [0] * num_rounds
-        self.acc_on_train_data = [0] * num_rounds
-        self.gradnorm_on_train_data = [0] * num_rounds
-        self.graddiff_on_train_data = [0] * num_rounds
-
-        # Statistics in test procedure
-        self.loss_on_eval_data = [0] * num_rounds
-        self.acc_on_eval_data = [0] * num_rounds
+        # # Statistics in training procedure
+        # self.loss_on_train_data = [0] * num_rounds
+        # self.acc_on_train_data = [0] * num_rounds
+        # # self.gradnorm_on_train_data = [0] * num_rounds
+        # # self.graddiff_on_train_data = [0] * num_rounds
+        #
+        # # Statistics in test procedure
+        # self.loss_on_test_data = [0] * num_rounds
+        # self.acc_on_test_data = [0] * num_rounds
+        # 用来保存训练客户端时输出的信息, 这是 rounds 维度上的
+        if train_metric_extend_columns is not None:
+            assert isinstance(train_metric_extend_columns, list)
+        else:
+            train_metric_extend_columns = []
+        self.train_metric_writer = pd.DataFrame(columns=['loss', 'acc'] + train_metric_extend_columns)
+        # 记录训练的信息
         # customs
         self.customs_data = dict()
         self.num_rounds = num_rounds
-        self.result_path = mkdir(os.path.join('./result', self.options['dataset']))
+        self.result_path = mkdir(os.path.join(result_prefix, self.options['dataset']))
         # suffix = '{}_sd{}_lr{}_ep{}_bs{}_{}'.format(name,
         #                                             options['seed'],
         #                                             options['lr'],
@@ -54,6 +64,7 @@ class Metrics(object):
         #     self.exp_name += '_{}'.format(suffix)
         train_event_folder = mkdir(os.path.join(self.result_path, self.exp_name, 'train.event'))
         eval_event_folder = mkdir(os.path.join(self.result_path, self.exp_name, 'eval.event'))
+        self.eval_metric_folder = mkdir(os.path.join(self.result_path, self.exp_name, 'eval_metric'))
         self.train_writer = SummaryWriter(train_event_folder)
         self.eval_writer = SummaryWriter(eval_event_folder)
 
@@ -69,16 +80,16 @@ class Metrics(object):
         for stats in stats_list:
             self.update_commu_stats(round_i, stats)
 
-    def update_train_stats(self, round_i, train_stats):
-        self.loss_on_train_data[round_i] = train_stats['loss']
-        self.acc_on_train_data[round_i] = train_stats['acc']
-        self.gradnorm_on_train_data[round_i] = train_stats['gradnorm']
-        self.graddiff_on_train_data[round_i] = train_stats['graddiff']
-
-        self.train_writer.add_scalar('train_loss', train_stats['loss'], round_i)
-        self.train_writer.add_scalar('train_acc', train_stats['acc'], round_i)
-        self.train_writer.add_scalar('gradnorm', train_stats['gradnorm'], round_i)
-        self.train_writer.add_scalar('graddiff', train_stats['graddiff'], round_i)
+    # def update_train_stats(self, round_i, train_stats):
+    #     self.loss_on_train_data[round_i] = train_stats['loss']
+    #     self.acc_on_train_data[round_i] = train_stats['acc']
+    #     self.gradnorm_on_train_data[round_i] = train_stats['gradnorm']
+    #     self.graddiff_on_train_data[round_i] = train_stats['graddiff']
+    #
+    #     self.train_writer.add_scalar('train_loss', train_stats['loss'], round_i)
+    #     self.train_writer.add_scalar('train_acc', train_stats['acc'], round_i)
+    #     self.train_writer.add_scalar('gradnorm', train_stats['gradnorm'], round_i)
+    #     self.train_writer.add_scalar('graddiff', train_stats['graddiff'], round_i)
 
     def update_grads_stats(self, round_i, stats):
         self.gradnorm_on_train_data[round_i] = stats['gradnorm']
@@ -87,17 +98,14 @@ class Metrics(object):
         self.train_writer.add_scalar('graddiff', stats['graddiff'], round_i)
 
     def update_train_stats_only_acc_loss(self, round_i, train_stats):
-        self.loss_on_train_data[round_i] = train_stats['loss']
-        self.acc_on_train_data[round_i] = train_stats['acc']
-        self.train_writer.add_scalar('train_loss', train_stats['loss'], round_i)
-        self.train_writer.add_scalar('train_acc', train_stats['acc'], round_i)
+        self.train_metric_writer = self.train_metric_writer.append(train_stats, ignore_index=True)
+        for k, v in train_stats.items():
+            self.train_writer.add_scalar('train' + k, v, round_i)
 
-    def update_eval_stats(self, round_i, eval_stats):
-        self.loss_on_eval_data[round_i] = eval_stats['loss']
-        self.acc_on_eval_data[round_i] = eval_stats['acc']
-
-        self.eval_writer.add_scalar('test_loss', eval_stats['loss'], round_i)
-        self.eval_writer.add_scalar('test_acc', eval_stats['acc'], round_i)
+    def update_eval_stats(self, round_i, df, on_which, filename, other_to_logger):
+        df.to_csv(os.path.join(self.eval_metric_folder, filename))
+        for k, v in other_to_logger.items():
+            self.eval_writer.add_scalar(f'on_{on_which}_{k}', v, round_i)
 
     def update_custom_scalars(self, round_i, **data):
         for key, scalar in data.items():
@@ -109,23 +117,6 @@ class Metrics(object):
     def write(self):
         metrics = dict()
 
-        # String
-        metrics['dataset'] = self.options['dataset']
-        metrics['num_rounds'] = self.options['num_rounds']
-        metrics['eval_every'] = self.options['eval_every']
-        metrics['eval_train_every'] = self.options['eval_train_every']
-        metrics['lr'] = self.options['lr']
-        metrics['num_epochs'] = self.options['num_epochs']
-        metrics['batch_size'] = self.options['batch_size']
-
-        metrics['loss_on_train_data'] = self.loss_on_train_data
-        metrics['acc_on_train_data'] = self.acc_on_train_data
-        metrics['gradnorm_on_train_data'] = self.gradnorm_on_train_data
-        metrics['graddiff_on_train_data'] = self.graddiff_on_train_data
-
-        metrics['loss_on_eval_data'] = self.loss_on_eval_data
-        metrics['acc_on_eval_data'] = self.acc_on_eval_data
-
         # Dict(key=cid, value=list(stats for each round))
         metrics['client_computations'] = self.client_computations
         metrics['bytes_written'] = self.bytes_written
@@ -133,6 +124,11 @@ class Metrics(object):
         for key, data in self.customs_data.items():
             metrics[key] = data
         metrics_dir = os.path.join(self.result_path, self.exp_name, 'metrics.json')
-
+        params_dir = os.path.join(self.result_path, self.exp_name, 'params.json')
         with open(metrics_dir, 'w') as ouf:
             json.dump(metrics, ouf)
+
+        with open(params_dir, 'w') as ouf:
+            json.dump(self.options, ouf)
+
+        self.train_metric_writer.to_csv(os.path.join(self.result_path, self.exp_name, 'train_metric.csv'))

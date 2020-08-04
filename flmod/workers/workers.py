@@ -1,5 +1,6 @@
 from flmod.utils.torch_utils import get_flat_params_from, set_flat_params_to, get_flat_grad, model_parameters_shape_list, from_flatten_to_parameter
 from flmod.utils.flops_counter import get_model_complexity_info
+import abc
 import tqdm
 import numpy as np
 import torch
@@ -7,9 +8,9 @@ from flmod.models.dice import bchw_dice_coeff
 from flmod.utils.torch_utils import get_flat_grad_from_sparse
 
 
-class Worker(object):
+class Worker(abc.ABC):
 
-    def __init__(self, model, criterion, optimizer, options):
+    def __init__(self, model, options):
         """
         基本的 Worker, 完成客户端和模型之间的交互, 适用于串行化的模型
         :param model: 模型
@@ -18,14 +19,15 @@ class Worker(object):
         :param options:
         """
         self.model = model
-        self.optimizer = optimizer
-        self.criterion = criterion
         self.device = options['device']
         self.verbose = True
         self.flops, self.params_num, self.model_bytes = \
             get_model_complexity_info(self.model, options['input_shape'], device=self.device, input_type=options.get('input_type'))
         self.model_shape_info = model_parameters_shape_list(model)
         self.hide_output = True if options['quiet'] == 0 else False
+
+    def get_latest_weights(self):
+        return self.get_flat_model_params().detach()
 
     def get_model_params_dict(self):
         """

@@ -1,9 +1,21 @@
 # GLOBAL PARAMETERS
 import argparse
-DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018', 'omniglot']
-TRAINERS = {'fedavg': 'FedAvg', 'fedprox': 'FedProx', 'fedprox_non_grad': 'FedProxNonGrad', 'fedavg_schemes': 'FedAvgSchemes', 'maml': 'MAML'}
-OPTIMIZERS = TRAINERS.keys()
+DATASETS = ['mnist', 'synthetic', 'shakespeare', 'brats2018', 'omniglot', 'femnist']
+TRAINERS = {'fedavg': 'FedAvg',
+            'fedprox': 'FedProx',
+            'fedprox_non_grad': 'FedProxNonGrad',
+            'fedavg_schemes': 'FedAvgSchemes',
+            'maml': 'MAML',
+            'fedmeta': 'FedMeta',
+            'fedavg_adv': 'FedAvgAdv'}
 
+OPTIMIZERS = TRAINERS.keys()
+MODEL_CONFIG = {
+    'mnist.logistic': {'out_dim': 10, 'in_dim': 784},
+    'femnist.cnn': {'num_classes': 62, 'image_size': 28},
+    'omniglot.cnn': {'num_classes': 5, 'image_size': 28}
+
+}
 
 class ModelConfig(object):
     def __init__(self):
@@ -36,6 +48,8 @@ class ModelConfig(object):
             return brats2018[model]
         elif dataset == 'omniglot':
             return {'input_shape': (1, 28, 28)}
+        elif dataset == 'femnist':
+            return {'num_classes': 62, 'image_size': 28, 'input_shape': (1, 28 * 28)}
         else:
             raise ValueError('Not support dataset {}!'.format(dataset))
 
@@ -54,7 +68,7 @@ class ModelConfig(object):
             #     return get_dataset(flatten_input=True)
             # else:
             #     return get_dataset(flatten_input=False)
-        elif dataset in ['synthetic', 'shakespeare', 'brats2018', 'omniglot']:
+        elif dataset in ['synthetic', 'shakespeare', 'brats2018', 'omniglot', 'femnist']:
             return None, None
         else:
             raise ValueError('Not support dataset {}!'.format(dataset))
@@ -85,7 +99,7 @@ def base_options():
     parser.add_argument('--dataset',
                         help='name of dataset;',
                         type=str,
-                        default='mnist_all_data_0_equal_niid')
+                        required=True)
     parser.add_argument('--model',
                         help='name of model;',
                         type=str,
@@ -102,12 +116,18 @@ def base_options():
                         help='number of rounds to simulate;',
                         type=int,
                         default=200)
-    parser.add_argument('--eval_every',
+    parser.add_argument('--eval_on_test_every',
                         help='evaluate every ____ rounds;',
                         type=int,
                         default=1)
-    parser.add_argument('--eval_train_every', type=int, default=5,
-                        help='evaluate on while train dataset every ___ round')
+    parser.add_argument('--eval_on_train_every',
+                        help='evaluate every ____ rounds;',
+                        type=int,
+                        default=1)
+    parser.add_argument('--eval_on_validation_every',
+                        help='evaluate every ____ rounds;',
+                        type=int,
+                        default=1)
     parser.add_argument('--save_every',
                         help='save global model every ____ rounds;',
                         type=int,
@@ -124,14 +144,6 @@ def base_options():
                         help='number of epochs when clients train on data;',
                         type=int,
                         default=20)
-    parser.add_argument('--drop_rate',
-                        help='number of epochs when clients train on data;',
-                        type=float,
-                        default=0.0)
-    parser.add_argument('--mu',
-                        help='mu',
-                        type=float,
-                        default=0.0)
     parser.add_argument('--lr',
                         help='learning rate for inner solver;',
                         type=float,
@@ -144,6 +156,23 @@ def base_options():
                         help='仅仅显示结果的代码',
                         type=int,
                         default=0)
+    parser.add_argument('--result_prefix',
+                        help='保存结果的前缀路径',
+                        type=str,
+                        default='./result')
+    parser.add_argument('--train_val_test',
+                        help='数据集是否以训练集、验证集和测试集的方式存在',
+                        action='store_true')
+    parser.add_argument('--result_dir',
+                        help='指定已经保存结果目录, 可以加载相关的 checkpoints',
+                        type=str,
+                        default='')
+    # TODO 以后支持 之家加载 leaf 目录里的数据
+    parser.add_argument('--data_format',
+                        help='加载的数据格式, json 为 Leaf以及Li T.等人定义的格式, 默认为 pkl',
+                        type=str,
+                        default='pkl')
+
     # FedAvg Scheme
     parser.add_argument('--scheme',
                         help='Scheme 1;Scheme 2;Transformed scheme 2',
@@ -158,4 +187,20 @@ def add_dynamic_options(argparser):
     algo = params.algo
     # if algo in ['maml']:
     #     argparser.add_argument('--q_coef', help='q', type=float, default=0.0)
+    if algo in ['fedmeta']:
+        argparser.add_argument('--meta_algo', help='使用的元学习算法, 默认 maml', type=str, default='maml',
+                               choices=['maml', 'reptile', 'meta_sgd'])
+        argparser.add_argument('--outer_lr', help='更新元学习中的外部学习率', type=float, required=True)
+        argparser.add_argument('--meta_inner_step', type=int, default=0)
+    elif algo == 'fedprox':
+        argparser.add_argument('--drop_rate',
+                            help='number of epochs when clients train on data;',
+                            type=float,
+                            default=0.0)
+        argparser.add_argument('--mu',
+                            help='mu',
+                            type=float,
+                            default=0.0)
+    elif algo == 'fedavg_adv':
+        argparser.add_argument('--use_all_data', action='store_true', default=False)
     return argparser
