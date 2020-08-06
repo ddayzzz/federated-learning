@@ -7,6 +7,12 @@ import os
 import re
 
 def __txt_to_data(txt_dir, seq_length=80):
+    """Parses text file in given directory into data for next-character model.
+
+    Args:
+        txt_dir: path to text file
+        seq_length: length of strings in X
+    """
     raw_text = ""
     with open(txt_dir,'r') as inf:
         raw_text = inf.read()

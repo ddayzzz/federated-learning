@@ -132,7 +132,7 @@ def add_dynamic_options(argparser):
     elif algo in ['fedmeta', 'fedmeta2', 'fedavg_splitted']:
         argparser.add_argument('--meta_algo', help='使用的元学习算法, 默认 maml', type=str, default='maml', choices=['maml', 'reptile', 'meta_sgd'])
         argparser.add_argument('--outer_lr', help='更新元学习中的外部学习率', type=float, required=True)
-        argparser.add_argument('--meta_num_fine_tune', type=int, default=5)
+        argparser.add_argument('--num_inner_steps', type=int, default=0)
     elif algo in ['fedprox']:
         argparser.add_argument('--mu',
                             help='mu',

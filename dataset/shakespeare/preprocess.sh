@@ -14,8 +14,8 @@ fi
 
 NAME="shakespeare"
 
-cd ../../utils
+cd ../utils
 
 ./preprocess.sh --name $NAME $@
 
-cd ../data/$NAME
+cd ../$NAME

@@ -44,7 +44,7 @@ class FedMetaBaseServer(BaseFedarated):
     def __init__(self, params, learner, dataset):
         print('Using Federated-Meta to Train')
         self.meta_algo = params["meta_algo"]
-        self.num_fine_tune = params['meta_num_fine_tune']
+        self.num_fine_tune = params['num_inner_steps']
         inner_opt = tf.train.AdamOptimizer(params['lr'])
         #
         append = f'meta_algo[{self.meta_algo}]_outer_lr{params["outer_lr"]}_finetune{self.num_fine_tune}'

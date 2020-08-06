@@ -30,7 +30,6 @@ def support_query_split(X, y, p):
     test_index = shuffled_indexes[sp_sz:]
     return X[train_index].tolist(), X[test_index].tolist(), y[train_index].tolist(), y[test_index].tolist()
 
-
 def print_stats(data, max_class_num):
     """
     统计信息, 必须满足需要序列化的数据的格式
@@ -39,6 +38,7 @@ def print_stats(data, max_class_num):
     :return:
     """
     y_size = []
+    all_classes = set()
     for i, user in enumerate(data['users']):
         x, y = data['user_data'][user]['x'], data['user_data'][user]['y']
         num_data = data['num_samples'][i]
@@ -46,8 +46,10 @@ def print_stats(data, max_class_num):
         y_unique = set(y)
         # y 个类别的数量
         y_size.append(len(y_unique))
-    print('Client num:', len(data['users']), ', Samples:', sum(data['num_samples']), ', Classes:', max_class_num)
-    print('\tSample per client, std:', np.std(data['num_samples']), ', mean:', np.mean(data['num_samples']), ', min:', np.min(data['num_samples']), ', max:', np.max(data['num_samples']))
+        all_classes.update(y_unique)
+    print('Client num:', len(data['users']), ', Samples:', sum(data['num_samples']), ', Classes:', len(all_classes))
+    print('\tSample per client, std:', np.std(data['num_samples']), ', mean:', np.mean(data['num_samples']), ', min:',
+          np.min(data['num_samples']), ', max:', np.max(data['num_samples']))
     print('\tClasses per client, min:', np.min(y_size), ', max:', np.max(y_size))
 
 
@@ -76,8 +78,8 @@ def split_to_support_query(train_dir, test_dir, p):
         print('User', user_name, end=' ')
         train_x = train_data[user_name]['x']
         train_y = train_data[user_name]['y']
-        test_x = train_data[user_name]['x']
-        test_y = train_data[user_name]['y']
+        test_x = test_data[user_name]['x']
+        test_y = test_data[user_name]['y']
         # 合并之后
         print('Found, train size:', len(train_y), ', test size:', len(test_y), end=' ')
         all_x = np.asarray(train_x + test_x)
@@ -91,13 +93,12 @@ def split_to_support_query(train_dir, test_dir, p):
         f_test_data['users'].append(user_name)
         f_test_data['user_data'][user_name] = {'x': qry_x, 'y': qry_y}
         f_test_data['num_samples'].append(len(qry_y))
+        print('Query size:', len(qry_y), 'Support size:', len(spt_y))
 
         # for stats
         before_merged['users'].append(user_name)
         before_merged['user_data'][user_name] = {'x': all_x, 'y': all_y}
         before_merged['num_samples'].append(len(all_y))
-
-        print('Query size:', len(qry_y), 'Support size:', len(spt_y))
 
     with open(os.path.join(train_prefix, f'p_{p}.pkl'), 'wb') as outfile:
         pickle.dump(f_train_data, outfile)

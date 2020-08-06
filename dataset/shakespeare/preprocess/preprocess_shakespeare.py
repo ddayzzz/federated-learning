@@ -1,3 +1,26 @@
+"""Preprocesses the Shakespeare dataset for federated training.
+Copyright 2017 Google Inc.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    https://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+To run:
+  python preprocess_shakespeare.py path/to/raw/shakespeare.txt output_directory/
+The raw data can be downloaded from:
+  http://www.gutenberg.org/cache/epub/100/pg100.txt
+(The Plain Text UTF-8 file format, md5sum: 036d0f9cf7296f41165c2e6da1e52a0e)
+Note that The Comedy of Errors has a incorrect indentation compared to all the
+other plays in the file. The code below reflects that issue. To make the code
+cleaner, you could fix the indentation in the raw shakespeare file and remove
+the special casing for that play in the code below.
+Authors: loeki@google.com, mcmahan@google.com
+Disclaimer: This is not an official Google product.
+"""
 import collections
 import json
 import os
@@ -165,7 +188,7 @@ def main(argv):
     with open(input_filename, 'r') as input_file:
         shakespeare_full = input_file.read()
     plays, discarded_lines = _split_into_plays(shakespeare_full)
-    print ('Discarded %d lines' % len(discarded_lines))
+    print('Discarded %d lines' % len(discarded_lines))
     users_and_plays, all_examples, _ = _get_train_test_by_character(plays, test_fraction=-1.0)
     output_directory = argv[1]
     with open(os.path.join(output_directory, 'users_and_plays.json'), 'w') as ouf:
